@@ -1,4 +1,5 @@
 from sqlalchemy import Column, String, DateTime, Integer, func
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 
@@ -12,7 +13,7 @@ class User(Base):
     first_name = Column(String(100))
     last_name = Column(String(100))
     phone = Column(String(20))
-    role = Column(String(20), default="customer")
+    role = Column(SQLEnum("customer", "admin", name="user_roles"), default="customer")
     created_at = Column(DateTime, default=func.current_timestamp())
     updated_at = Column(DateTime, default=func.current_timestamp())
 
