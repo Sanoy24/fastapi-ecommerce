@@ -89,7 +89,7 @@ CREATE TABLE CartItems (
 --  ORDERS
 -- ========================================
 CREATE TABLE Orders (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     shipping_address_id BIGINT NOT NULL,
     billing_address_id BIGINT NOT NULL,
@@ -98,6 +98,8 @@ CREATE TABLE Orders (
     status ENUM('pending', 'paid', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending',
     order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     shipped_at TIMESTAMP NULL,
+    tx_ref VARCHAR(255) UNIQUE,
+    payment_status ENUM('pending', 'success', 'failed') DEFAULT 'pending'
     
     CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES Users(id)
         ON DELETE CASCADE ON UPDATE CASCADE,
