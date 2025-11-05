@@ -2,7 +2,7 @@ from pwdlib import PasswordHash
 from datetime import timedelta, datetime, timezone
 from typing import Dict, Optional, Any
 import jwt
-from jwt import ExpiredSignatureError, InvalidTokenError
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from app.core.config import setting
 from app.schema.user_schema import TokenSchema
 
@@ -66,7 +66,7 @@ def create_token(
 
 
 # token verification
-def verify_access_token(token: str) -> Dict[str, Any]:
+def decode_access_token(token: str) -> Dict[str, Any]:
     """
     Verify and decode a JWT access token.
 

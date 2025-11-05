@@ -1,8 +1,19 @@
 from app.db.database import SessionLocal
 from typing import Generator
 from sqlalchemy.orm import Session
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 from app.services.user_service import UserService
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Annotated
+from app.utils.security import decode_access_token, TokenError
+from app.models.user import User
+from app.schema.user_schema import UserPublic
+
+oauth_scheme = HTTPBearer(
+    scheme_name="Bearer",
+    auto_error=False,
+    description="JWT Access Token in the Authorization header",
+)
 
 
 def get_db() -> Generator:
@@ -21,3 +32,40 @@ def get_user_service_dep(db: Session = Depends(get_db)) -> UserService:
     User service dependency
     """
     return UserService(db=db)
+
+
+async def get_current_user(
+    user_service: Annotated[UserService, Depends(get_user_service_dep)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(oauth_scheme)],
+) -> UserPublic:
+    """
+    Get current authenticated user from JWT token
+    """
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        decoded_token = decode_access_token(token=credentials.credentials)
+
+        user_id = decoded_token.get("sub")
+
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user = user_service.get_user_by_id(id=int(user_id))
+        return UserPublic.model_validate(user)
+
+    except TokenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        )

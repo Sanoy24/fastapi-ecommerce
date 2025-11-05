@@ -40,6 +40,15 @@ class UserService:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
             )
-        access_token_payload = {"id": user.id}
+        access_token_payload = {"sub": str(user.id)}
         access_token = create_token(data=access_token_payload)
         return TokenSchema(token=access_token, token_type="Bearer")
+
+    def get_user_by_id(self, id: int) -> User:
+        user = self.crud.get_user(user_id=id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+        return user
