@@ -6,6 +6,9 @@ from app.services.user_service import UserService
 
 
 def get_db() -> Generator:
+    """
+    Local db Session
+    """
     db = SessionLocal()
     try:
         yield db
@@ -13,5 +16,8 @@ def get_db() -> Generator:
         db.close()
 
 
-def get_user_service_dep(db: Session = Depends(get_db)):
+def get_user_service_dep(db: Session = Depends(get_db)) -> UserService:
+    """
+    User service dependency
+    """
     return UserService(db=db)

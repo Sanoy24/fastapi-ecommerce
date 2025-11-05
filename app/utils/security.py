@@ -31,7 +31,7 @@ def create_token(
     expiration: Optional[timedelta] = None,
     issuer: Optional[str] = None,
     audience: Optional[str] = None,
-) -> TokenSchema:
+) -> str:
     """
     Create a JWT token with expiration and optional issuer/audience.
 
@@ -62,7 +62,7 @@ def create_token(
         payload["aud"] = audience
 
     token = jwt.encode(payload, setting.JWT_SECRET_KEY, algorithm=setting.JWT_ALGORITHM)
-    return TokenSchema(token=token)
+    return token
 
 
 # token verification

@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr
+from typing import Optional
 
 
 class CreateUserSchema(BaseModel):
@@ -9,7 +10,7 @@ class CreateUserSchema(BaseModel):
     phone: str
 
 
-class UserResponse(BaseModel):
+class UserPublic(BaseModel):
     id: int
     email: str
     first_name: str
@@ -19,5 +20,11 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class LoginSchema(BaseModel):
+    email: EmailStr
+    password: str
+
+
 class TokenSchema(BaseModel):
     token: str
+    token_type: str
