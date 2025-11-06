@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
+from .address_schema import AddressPublic
 
 
 class CreateUserSchema(BaseModel):
@@ -41,6 +42,7 @@ class UserPublic(BaseModel):
     last_name: Optional[str]
     phone: Optional[str]
     role: str
+    addresses: list[AddressPublic] = []
     created_at: datetime
     updated_at: datetime
 

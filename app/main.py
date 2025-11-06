@@ -2,16 +2,18 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.api.v1.routes import healthcheck, user
 from sqlalchemy.exc import SQLAlchemyError
+from app.middleware.request_logger import LoggingMiddleware
 
 
 app = FastAPI(root_path="/api/v1")
+app.add_middleware(LoggingMiddleware)
 
 
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     return JSONResponse(
         status_code=500,
-        content={"detail": "A database error occurred. Please try again later."},
+        content={"detail": "Please try again later."},
     )
 
 

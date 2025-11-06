@@ -3,6 +3,7 @@ from typing import Generator
 from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException, status
 from app.services.user_service import UserService
+from app.services.address_service import AddressService
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Annotated
 from app.utils.security import decode_access_token, TokenError
@@ -33,6 +34,13 @@ def get_user_service_dep(db: Session = Depends(get_db)) -> UserService:
     User service dependency
     """
     return UserService(db=db)
+
+
+def get_address_service_dep(db: Session = Depends(get_db)) -> AddressService:
+    """
+    Address service dependency
+    """
+    return AddressService(db=db)
 
 
 async def get_current_user(

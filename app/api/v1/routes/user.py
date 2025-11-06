@@ -6,13 +6,22 @@ from app.schema.user_schema import (
     UserPublic,
     UpdateUserSchema,
 )
-from app.dependencies import get_user_service_dep, get_current_user, require_admin
+from app.crud.address import AddressCrud
+from app.schema.address_schema import AddressCreate
+from app.dependencies import (
+    get_user_service_dep,
+    get_current_user,
+    require_admin,
+    get_address_service_dep,
+)
 from app.services.user_service import UserService
+from app.services.address_service import AddressService
 from typing import Annotated
 from app.models.user import User
 
 router = APIRouter(tags=["User"])
 user_dependency = Annotated[UserService, Depends(get_user_service_dep)]
+address_depedency = Annotated[AddressService, Depends(get_address_service_dep)]
 
 
 @router.post("/register")
@@ -57,3 +66,14 @@ async def delete_user(
 ):
     user_service.delete_user(id=current_user.id)
     return {"detail": "User deleted successfully"}
+
+
+@router.post("/me/address")
+async def add_address_to_user(
+    address_data: AddressCreate,
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    address_service: address_depedency,
+):
+    user_id = current_user.id
+    address = address_service.add_address(user_id, address_data=address_data)
+    return address
