@@ -3,6 +3,7 @@ from app.schema.user_schema import (
     UserPublic,
     LoginSchema,
     TokenSchema,
+    UpdateUserSchema,
 )
 from app.models.user import User
 from sqlalchemy.orm import Session
@@ -52,3 +53,25 @@ class UserService:
                 detail="User not found",
             )
         return user
+
+    def update_user(self, id: int, update_user_data: UpdateUserSchema) -> UserPublic:
+        user = self.crud.get_user(user_id=id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        for field, value in update_user_data.model_dump(exclude_unset=True).items():
+            setattr(user, field, value)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def delete_user(self, id: int):
+        user = self.crud.get_user(user_id=id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        self.db.delete(user)
+        self.db.commit()
+        return

@@ -4,8 +4,9 @@ from app.schema.user_schema import (
     LoginSchema,
     TokenSchema,
     UserPublic,
+    UpdateUserSchema,
 )
-from app.dependencies import get_user_service_dep, get_current_user
+from app.dependencies import get_user_service_dep, get_current_user, require_admin
 from app.services.user_service import UserService
 from typing import Annotated
 from app.models.user import User
@@ -35,3 +36,24 @@ async def get_user(
     current_user: Annotated[UserPublic, Depends(get_current_user)],
 ):
     return current_user
+
+
+@router.put("/me", response_model=UserPublic)
+async def update_user(
+    update_user_data: UpdateUserSchema,
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    user_service: user_dependency,
+):
+    updated_user = user_service.update_user(
+        id=current_user.id, update_user_data=update_user_data
+    )
+    return updated_user
+
+
+@router.delete("/me")
+async def delete_user(
+    current_user: Annotated[require_admin, Depends()],
+    user_service: user_dependency,
+):
+    user_service.delete_user(id=current_user.id)
+    return {"detail": "User deleted successfully"}
