@@ -8,6 +8,7 @@ from typing import Annotated
 from app.utils.security import decode_access_token, TokenError
 from app.models.user import User
 from app.schema.user_schema import UserPublic
+from app.core.logger import *
 
 oauth_scheme = HTTPBearer(
     scheme_name="Bearer",
@@ -41,6 +42,7 @@ async def get_current_user(
     """
     Get current authenticated user from JWT token
     """
+    logger.info(credentials)
     if credentials is None or not credentials.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -69,3 +71,13 @@ async def get_current_user(
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def require_admin(
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+) -> UserPublic:
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized"
+        )
+    return current_user
