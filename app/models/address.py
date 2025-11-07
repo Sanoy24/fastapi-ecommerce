@@ -1,6 +1,16 @@
-from sqlalchemy import Column, Integer, ForeignKey, Text, String, Boolean
+from sqlalchemy import (
+    Column,
+    Integer,
+    ForeignKey,
+    Text,
+    String,
+    Boolean,
+    DateTime,
+    func,
+)
 from sqlalchemy.orm import relationship
 from app.db.database import Base
+from datetime import datetime, timezone
 
 
 class Address(Base):
@@ -17,6 +27,10 @@ class Address(Base):
     postal_code = Column(String(20))
     country = Column(String(100))
     is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
+    updated_at = Column(
+        DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.now()
+    )
 
     # Relationships
     user = relationship("User", back_populates="addresses")

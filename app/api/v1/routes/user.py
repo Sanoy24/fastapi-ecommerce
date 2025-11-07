@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from app.schema.user_schema import (
     CreateUserSchema,
     LoginSchema,
@@ -7,7 +7,7 @@ from app.schema.user_schema import (
     UpdateUserSchema,
 )
 from app.crud.address import AddressCrud
-from app.schema.address_schema import AddressCreate
+from app.schema.address_schema import AddressCreate, AddressUpdate
 from app.dependencies import (
     get_user_service_dep,
     get_current_user,
@@ -16,7 +16,7 @@ from app.dependencies import (
 )
 from app.services.user_service import UserService
 from app.services.address_service import AddressService
-from typing import Annotated
+from typing import Annotated, Optional
 from app.models.user import User
 
 router = APIRouter(tags=["User"])
@@ -75,5 +75,22 @@ async def add_address_to_user(
     address_service: address_depedency,
 ):
     user_id = current_user.id
-    address = address_service.add_address(user_id, address_data=address_data)
+    is_first = False
+    if not current_user.addresses:
+        is_first = True
+    address = address_service.add_address(user_id, is_first, address_data=address_data)
+    return address
+
+
+@router.put("/me/address/{address_id}")
+async def update_address(
+    address_data: AddressUpdate,
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    address_service: address_depedency,
+    address_id: int,
+):
+    if not address_data:
+        raise HTTPException(status_code=400, detail="No data provided for update")
+
+    address = address_service.update_address(address_id, address_data)
     return address

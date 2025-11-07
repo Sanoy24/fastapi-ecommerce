@@ -20,13 +20,15 @@ class AddressCreate(AddressBase):
 
 # ---- Update ----
 class AddressUpdate(BaseModel):
-    type: str = Field(max_length=20)
-    street: Optional[str] = None
+    type: Optional[str] = Field(default=None, max_length=20)
+    street: Optional[str] = Field(default=None, max_length=100)
     city: Optional[str] = Field(default=None, max_length=100)
-    state: Optional[str] = Field(default=None, max_digits=100)
+    state: Optional[str] = Field(default=None, max_length=100)
     postal_code: Optional[str] = Field(default=None, max_length=20)
     country: Optional[str] = Field(default=None, max_length=100)
-    is_default: Optional[bool] = False
+    is_default: Optional[bool] = None
+
+    model_config = {"from_attributes": True}
 
 
 # ---- Public / Response ----
