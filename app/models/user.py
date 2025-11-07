@@ -15,7 +15,7 @@ class User(Base):
     phone = Column(String(20))
     role = Column(SQLEnum("customer", "admin", name="user_roles"), default="customer")
     created_at = Column(DateTime, default=func.current_timestamp())
-    updated_at = Column(DateTime, default=func.current_timestamp())
+    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.now())
 
     # Relationships
     addresses = relationship(

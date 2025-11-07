@@ -50,7 +50,6 @@ async def get_current_user(
     """
     Get current authenticated user from JWT token
     """
-    logger.info(credentials)
     if credentials is None or not credentials.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
