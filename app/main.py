@@ -5,9 +5,60 @@ from app.api.v1.routes import healthcheck, user
 from sqlalchemy.exc import SQLAlchemyError
 from app.middleware.request_logger import LoggingMiddleware
 from app.core.logger import logger
+from pydantic import BaseModel
 
 
-app = FastAPI(root_path="/api/v1")
+class RootResponse(BaseModel):
+    message: str
+
+
+app = FastAPI(
+    # --- Metadata for Documentation (Title and Description are crucial) ---
+    title="E-Commerce Backend API",
+    description="RESTful API for managing the product catalog, user authentication, shopping carts, and order processing for the online store.",
+    version="1.0.0",
+    # --- Additional OpenAPI Metadata ---
+    contact={
+        "name": "Yonas Mekonnen",
+        "email": "myonas886@gmail.com",
+        "url": "https://yonas-mekonnen-portfolio.vercel.app/",
+    },
+    license_info={
+        "name": "MIT",  # Or your preferred license (e.g., Apache 2.0)
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    openapi_tags=[
+        {
+            "name": "products",
+            "description": "Operations related to product catalog management.",
+        },
+        {
+            "name": "users",
+            "description": "User authentication and profile management.",
+        },
+        {
+            "name": "carts",
+            "description": "Shopping cart operations.",
+        },
+        {
+            "name": "orders",
+            "description": "Order processing and history.",
+        },
+    ],
+    # --- Servers for Multi-Environment Support ---
+    # --- Path Configuration ---
+    # Sets the base path for all routes, essential if your API runs behind a proxy or gateway.
+    root_path="/api/v1",
+    servers=[],
+    # Sets the documentation path. Since root_path is set to /api/v1,
+    # setting docs_url to "/docs" will result in the final path /api/v1/docs.
+    docs_url="/docs",
+    redoc_url="/redoc",
+    # --- Optional: Custom OpenAPI Schema Overrides ---
+    # You can override the OpenAPI schema function if needed for custom logic
+    # openapi_url="/openapi.json",
+)
+
 app.add_middleware(LoggingMiddleware)
 
 
@@ -38,22 +89,19 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    # Detect Pydantic’s raw TypeError before it crashes
-    if isinstance(exc, TypeError) and "max_digits" in str(exc):
-        logger.warning(f"Pydantic TypeError caught: {exc}")
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={"detail": str(exc)},
-        )
-
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
     logger.info(f"Unhandled exception: {exc}")
     return JSONResponse(
         status_code=500,
         content={"detail": "An unexpected error occurred."},
     )
+
+
+@app.get("/", tags=["Root"], response_model=RootResponse)
+def read_root():
+    """Returns a welcome message for the API root."""
+    return {
+        "message": "Welcome to the E-Commerce API v1. Check out /docs for the spec!"
+    }
 
 
 app.include_router(router=healthcheck.router, prefix="/healthcheck")
