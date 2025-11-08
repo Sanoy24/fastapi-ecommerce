@@ -2,11 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.db.database import check_db_health
 from sqlalchemy.orm import Session
 from app.dependencies import get_db
+from pydantic import BaseModel
 
 router = APIRouter(tags={"Healthcheck"})
 
 
-@router.get("")
+class HealthCheckResponseModel(BaseModel):
+    status: str
+    database: str
+
+
+@router.get("", response_model=HealthCheckResponseModel)
 async def health_check(db: Session = Depends(get_db)):
     """
     Endpoint to check the health status of the database connection and overall server.

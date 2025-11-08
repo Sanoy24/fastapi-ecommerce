@@ -56,3 +56,7 @@ class UpdateUserSchema(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
 
     model_config = {"from_attributes": True}
+
+
+class DeleteUserResponseModel(BaseModel):
+    detail: str
