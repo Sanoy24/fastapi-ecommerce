@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException, status
 from app.services.user_service import UserService
 from app.services.address_service import AddressService
+from app.services.category_service import CategoryService
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Annotated
 from app.utils.security import decode_access_token, TokenError
@@ -41,6 +42,10 @@ def get_address_service_dep(db: Session = Depends(get_db)) -> AddressService:
     Address service dependency
     """
     return AddressService(db=db)
+
+
+def get_category_service_dep(db: Session = Depends(get_db)) -> CategoryService:
+    return CategoryService(db=db)
 
 
 async def get_current_user(
@@ -81,10 +86,10 @@ async def get_current_user(
 
 
 def require_admin(
-    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    current_user: UserPublic = Depends(get_current_user),
 ) -> UserPublic:
     if current_user.role != "admin":
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required"
         )
     return current_user
