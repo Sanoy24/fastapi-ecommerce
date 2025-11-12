@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from app.api.v1.routes import healthcheck, user
+from app.api.v1.routes import healthcheck, user, category
 from sqlalchemy.exc import SQLAlchemyError
 from app.middleware.request_logger import LoggingMiddleware
 from app.core.logger import logger
@@ -106,3 +106,4 @@ def read_root():
 
 app.include_router(router=healthcheck.router, prefix="/healthcheck")
 app.include_router(router=user.router, prefix="/users")
+app.include_router(router=category.router, prefix="/category")
