@@ -33,6 +33,17 @@ class CategoryService:
             )
         return CategoryPublic.model_validate(category)
 
+    def get_all_categories(self) -> list[CategoryPublic]:
+        try:
+            categories = self.crud.get_all_categories()
+            return [CategoryPublic.model_validate(cat) for cat in categories]
+        except Exception as e:
+            logger.error(f"Error fetching categories: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch categories.",
+            )
+
     def get_category_by_slug(self, slug: str) -> CategoryPublic:
         category = self.crud.get_category_by_slug(slug)
         if not category:

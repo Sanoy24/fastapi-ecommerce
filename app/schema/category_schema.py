@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ValidationInfo
 import re
 
 # class Category(Base):
@@ -34,6 +34,13 @@ class CreateCategory(BaseModel):
     def validate_image_url(cls, v):
         if v and not v.startswith(("http://", "https://")):
             raise ValueError("Image URL must be a valid HTTP/HTTPS link")
+        return v
+
+    @field_validator("parent_id")
+    def prevent_self_parent(cls, v, info: ValidationInfo):
+        # `info.data` contains already validated fields
+        if v is not None and "id" in info.data and v == info.data["id"]:
+            raise ValueError("Category cannot be its own parent")
         return v
 
 
