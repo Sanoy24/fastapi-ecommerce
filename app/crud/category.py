@@ -63,3 +63,9 @@ class CategoryCrud:
             return False
         self.db.commit()
         return True
+
+    def get_all_categories(self) -> list[Category]:
+        """Get all categories"""
+        stmt = select(Category).order_by(Category.id)
+        result = self.db.scalars(stmt).all()
+        return result
