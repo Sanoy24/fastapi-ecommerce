@@ -5,6 +5,7 @@ from fastapi import Depends, HTTPException, status
 from app.services.user_service import UserService
 from app.services.address_service import AddressService
 from app.services.category_service import CategoryService
+from app.services.product_service import ProductService
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Annotated
 from app.utils.security import decode_access_token, TokenError
@@ -46,6 +47,10 @@ def get_address_service_dep(db: Session = Depends(get_db)) -> AddressService:
 
 def get_category_service_dep(db: Session = Depends(get_db)) -> CategoryService:
     return CategoryService(db=db)
+
+
+def get_product_service_dep(db: Annotated[Session, Depends(get_db)]) -> ProductService:
+    return ProductService(db=db)
 
 
 async def get_current_user(
