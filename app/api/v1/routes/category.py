@@ -63,7 +63,7 @@ async def update_category(
     current_admin: admin_dependency,
 ):
     updated_category = category_service.update_category(id, update_dto)
-    return update_dto
+    return updated_category
 
 
 @router.delete("/{id}")

@@ -10,7 +10,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from app.db.database import Base
-from datetime import datetime, timezone
 
 
 class Address(Base):

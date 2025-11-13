@@ -19,7 +19,7 @@ oauth_scheme = HTTPBearer(
 )
 
 
-def get_db() -> Generator:
+def get_db() -> Generator[Session, None, None]:
     """
     Local db Session
     """

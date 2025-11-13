@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
 import re
+from app.core.logger import logger
 
 # class Category(Base):
 #     __tablename__ = "categories"
@@ -39,6 +40,7 @@ class CreateCategory(BaseModel):
     @field_validator("parent_id")
     def prevent_self_parent(cls, v, info: ValidationInfo):
         # `info.data` contains already validated fields
+        logger.info(f"-- validation result ---: {info.data}")
         if v is not None and "id" in info.data and v == info.data["id"]:
             raise ValueError("Category cannot be its own parent")
         return v
@@ -61,3 +63,17 @@ class UpdateCategory(BaseModel):
     parent_id: int | None = None
     description: str | None = None
     image_url: str | None = None
+
+    @field_validator("slug")
+    def validate_slug(cls, v):
+        if not v.islower() or not re.match(r"^[a-z0-9-]+$", v):
+            raise ValueError("Slug must be lowercase alphanumeric with hyphens only")
+        return v
+
+    @field_validator("image_url")
+    def validate_image_url(cls, v):
+        if v and not v.startswith(("http://", "https://")):
+            raise ValueError("Image URL must be a valid HTTP/HTTPS link")
+        return v
+
+    model_config = {"from_attributes": True}

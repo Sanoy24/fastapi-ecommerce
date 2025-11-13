@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError  # Import for specific handling
-from app.core.exceptions import CategoryCreationError
+from app.core.exceptions import CategoryCreationError, CategoryUpdateError
 from app.crud.category import CategoryCrud
 from app.schema.category_schema import CreateCategory, UpdateCategory, CategoryPublic
 from fastapi import HTTPException, status
@@ -53,12 +53,27 @@ class CategoryService:
         return CategoryPublic.model_validate(category)
 
     def update_category(self, id: int, update_dto: UpdateCategory) -> CategoryPublic:
-        updated_category = self.crud.update_category(id, update_dto)
-        if not updated_category:
+        try:
+            updated_category = self.crud.update_category(id, update_dto)
+            if not updated_category:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
+                )
+            return CategoryPublic.model_validate(updated_category)
+        except CategoryUpdateError as e:
+            if "its own parent" in str(e):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+                )
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="invalid category update data",
             )
-        return CategoryPublic.model_validate(updated_category)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="please try again.",
+            )
 
     def delete_category(
         self, id: int
