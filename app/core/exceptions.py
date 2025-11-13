@@ -4,3 +4,7 @@ class CategoryCreationError(Exception):
 
 class CategoryUpdateError(Exception):
     pass
+
+
+class ProductException(Exception):
+    pass
