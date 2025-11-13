@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
-from app.core.exceptions import CategoryCreationError
+from app.core.exceptions import CategoryCreationError, CategoryUpdateError
 from app.models.category import Category
 from app.schema.category_schema import CategoryPublic, CreateCategory, UpdateCategory
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
+from app.core.logger import logger
 
 
 class CategoryCrud:
@@ -38,21 +39,32 @@ class CategoryCrud:
 
     def update_category(self, id: int, update_dto: UpdateCategory) -> Category:
         """Updates an existing Category record efficiently."""
-        update_data = update_dto.model_dump(exclude_unset=True)
+        try:
+            update_data = update_dto.model_dump(exclude_unset=True)
 
-        if not update_data:
-            return self.get_category_by_id(id)
+            if "parent_id" in update_data and update_data["parent_id"] == id:
+                raise CategoryUpdateError("A category cannot be its own parent")
 
-        stmt = (
-            update(Category)
-            .where(Category.id == id)
-            .values(**update_data)
-            .returning(Category)
-        )
+            if not update_data:
+                return self.get_category_by_id(id)
 
-        updated_category = self.db.execute(stmt).scalar_one_or_none()
-        self.db.commit()
-        return updated_category
+            stmt = (
+                update(Category)
+                .where(Category.id == id)
+                .values(**update_data)
+                .returning(Category)  # This ensures the returned object is complete
+            )
+
+            updated_category = self.db.execute(stmt).scalar_one_or_none()
+            self.db.commit()
+
+            # --- REMOVE THIS LINE ---
+            # self.db.refresh(updated_category)
+            logger.info(f"--------: {updated_category}")
+
+            return updated_category
+        except ValueError as e:
+            raise CategoryUpdateError(str(e)) from e
 
     # delete category
     def delete_category(self, id: int) -> bool:

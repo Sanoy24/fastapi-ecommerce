@@ -1,19 +1,20 @@
-from sqlalchemy import create_engine, MetaData
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy import text
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 from app.core.config import setting
-from typing import Generator
+
 
 engine = create_engine(setting.Database_url, connect_args={"check_same_thread": False})
-Base = declarative_base()
+
+
+class Base(DeclarativeBase):
+    pass
+
 
 Base.metadata.create_all(engine)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-
 
 
 def check_db_health(db: Session) -> bool:
