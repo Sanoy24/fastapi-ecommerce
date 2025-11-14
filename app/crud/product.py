@@ -1,20 +1,17 @@
 from pydantic import HttpUrl
-from sqlalchemy.orm import Session
-from app.schema.product_schema import ProductCreate, ProductUpdate
-from app.models.product import Product
-from app.core.exceptions import ProductException
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
-from app.utils.generate_slug import generate_slug, generate_sku
+from sqlalchemy.orm import Session
+
+from app.core.exceptions import ProductException
 from app.core.logger import logger
-from sqlalchemy import select, update, delete
+from app.models.category import Category
+from app.models.product import Product
+from app.schema.product_schema import ProductCreate, ProductUpdate
+from app.utils.generate_slug import generate_sku, generate_slug
 
 
 class ProductCrud:
-    """Data access layer for Product entities.
-
-    Provides create, read, update, and delete operations using SQLAlchemy 2.0
-    queries and handles uniqueness conflicts via ProductException.
-    """
     def __init__(self, db: Session):
         self.db = db
 
@@ -30,7 +27,7 @@ class ProductCrud:
             if not product_name:
                 raise ValueError("Product name is required for slug generation.")
 
-            gen_slug = generate_slug(self.db, product_name)
+            gen_slug = generate_slug(self.db, product_name, context="product")
             gen_sku = generate_sku(product_name)
 
             product = Product(**create_data, slug=gen_slug, sku=gen_sku)
@@ -62,10 +59,7 @@ class ProductCrud:
         stmt = select(Product).order_by(Product.id)
         return self.db.scalars(stmt).all()
 
-<<<<<<< Updated upstream
-=======
     def get_products_by_category_id(self, category_id: int) -> list[Product]:
-        """List products filtered by category id."""
         stmt = (
             select(Product)
             .where(Product.category_id == category_id)
@@ -74,7 +68,6 @@ class ProductCrud:
         return self.db.scalars(stmt).all()
 
     def get_products_by_category_slug(self, slug: str) -> list[Product]:
-        """List products in the category identified by slug."""
         stmt = (
             select(Product)
             .join(Category, Product.category_id == Category.id)
@@ -83,7 +76,6 @@ class ProductCrud:
         )
         return self.db.scalars(stmt).all()
 
->>>>>>> Stashed changes
     def update_product(self, id: int, update_dto: ProductUpdate) -> Product | None:
         """Partially update product; auto-generate slug when name changes."""
         try:

@@ -19,6 +19,7 @@ class CategoryService:
             result = self.crud.create_category(create_dto)
             return CategoryPublic.model_validate(result)
         except CategoryCreationError as e:
+            logger.warning(f"error: {e}")
             if "UNIQUE constraint" in str(e):
                 raise HTTPException(status_code=409, detail="Category already exists.")
             raise HTTPException(status_code=400, detail="Invalid category data.")

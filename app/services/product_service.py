@@ -1,22 +1,16 @@
+from typing import List
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from app.crud.product import ProductCrud
-from app.schema.product_schema import (
-    ProductCreate,
-    ProductUpdate,
-    ProductResponse,
-)
+
 from app.core.exceptions import ProductException
 from app.core.logger import logger
-from typing import List
+from app.crud.category import CategoryCrud
+from app.crud.product import ProductCrud
+from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
 
 
 class ProductService:
-    """Business logic for products.
-
-    Orchestrates CRUD calls, applies validation and HTTP error mapping, and
-    returns Pydantic response models.
-    """
     def __init__(self, db: Session):
         self.db = db
         self.crud = ProductCrud(db=db)
@@ -100,16 +94,12 @@ class ProductService:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
             )
         return None
-<<<<<<< Updated upstream
-=======
 
     def get_products_by_category_id(self, category_id: int) -> List[ProductResponse]:
-        """List products belonging to a category by id."""
         products = self.crud.get_products_by_category_id(category_id)
         return [ProductResponse.model_validate(p) for p in products]
 
     def get_products_by_category_slug(self, slug: str) -> List[ProductResponse]:
-        """List products belonging to a category by slug; 404 if category missing."""
         category = CategoryCrud(self.db).get_category_by_slug(slug)
         if category is None:
             raise HTTPException(
@@ -117,4 +107,3 @@ class ProductService:
             )
         products = self.crud.get_products_by_category_id(category.id)
         return [ProductResponse.model_validate(p) for p in products]
->>>>>>> Stashed changes
