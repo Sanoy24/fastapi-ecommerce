@@ -1,4 +1,3 @@
-# logging_middleware.py
 import json
 import time
 from typing import Dict, Any, Optional
@@ -10,6 +9,7 @@ from app.core.logger import logger
 
 SENSITIVE_HEADERS = {"authorization", "cookie", "set-cookie"}
 MAX_BODY_LOG_BYTES = 1024 * 16  # 16 KB - cap how much of the body we log
+SENSITIVE_BODY_KEYS = {"password", "token", "access_token", "refresh_token"}
 
 
 def _safe_json_loads(b: bytes) -> Any:
@@ -20,6 +20,22 @@ def _safe_json_loads(b: bytes) -> Any:
             return b.decode("utf-8", errors="replace")
         except Exception:
             return "<binary data>"
+
+
+def _redact_body(data: Any) -> Any:
+    if isinstance(data, dict):
+        redacted = {}
+        for k, v in data.items():
+            if k.lower() in SENSITIVE_BODY_KEYS:
+                redacted[k] = "<redacted>"
+            else:
+                redacted[k] = _redact_body(v)
+        return redacted
+
+    elif isinstance(data, list):
+        return [_redact_body(item) for item in data]
+
+    return data  # primitives unchanged
 
 
 def _redact_headers(headers: Dict[str, str]) -> Dict[str, Optional[str]]:
@@ -36,8 +52,6 @@ class LoggingMiddleware:
     """
     ASGI middleware that safely logs requests and responses without
     preventing downstream access to bodies.
-
-    Add with app.add_middleware(LoggingMiddleware) or include in middleware list.
     """
 
     def __init__(self, app: ASGIApp):
@@ -115,13 +129,15 @@ class LoggingMiddleware:
             if len(request_body_bytes) > MAX_BODY_LOG_BYTES:
                 truncated = request_body_bytes[:MAX_BODY_LOG_BYTES]
                 parsed = _safe_json_loads(truncated)
+                redacted = _redact_body(parsed)
                 request_info["body"] = {
                     "truncated": True,
-                    "preview": parsed,
+                    "preview": redacted,
                     "full_size": len(request_body_bytes),
                 }
             else:
-                request_info["body"] = _safe_json_loads(request_body_bytes)
+                parsed = _safe_json_loads(request_body_bytes)
+                request_info["body"] = _redact_body(parsed)
         else:
             request_info["body"] = None
 
@@ -179,9 +195,8 @@ class LoggingMiddleware:
                         response_logged["body"] = None
                     else:
                         # try parse JSON, else show text preview
-                        response_logged["body"] = _safe_json_loads(
-                            bytes(response_body_accum)
-                        )
+                        parsed_body = _safe_json_loads(bytes(response_body_accum))
+                        response_logged["body"] = _redact_body(parsed_body)
 
                     # if the full response was larger than cap, include a hint
                     # Note: we don't know full response size without buffering everything: we only know preview size
