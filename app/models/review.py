@@ -1,32 +1,25 @@
-from sqlalchemy import (
-    Column,
-    Integer,
-    Text,
-    ForeignKey,
-    Integer,
-    DateTime,
-    Boolean,
-    func,
-)
-from sqlalchemy.orm import relationship
+from sqlalchemy import Integer, Text, ForeignKey, DateTime, Boolean, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Optional
+from datetime import datetime
 from app.db.database import Base
 
 
 class Review(Base):
     __tablename__ = "reviews"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    product_id = Column(
-        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
     )
-    rating = Column(Integer)  # Add CHECK constraint via DB or validator in app
-    comment = Column(Text)
-    created_at = Column(DateTime, default=func.current_timestamp())
-    is_approved = Column(Boolean, default=False)
+    rating: Mapped[int] = mapped_column(Integer)
+    comment: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.current_timestamp())
+    is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships
-    user = relationship("User", back_populates="reviews")
-    product = relationship("Product", back_populates="reviews")
+    user: Mapped["User"] = relationship("User", back_populates="reviews")
+    product: Mapped["Product"] = relationship("Product", back_populates="reviews")
