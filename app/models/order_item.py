@@ -4,6 +4,7 @@ from app.db.database import Base
 
 
 class OrderItem(Base):
+    """Order line item representing a product and quantity in an order."""
     __tablename__ = "orderitems"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

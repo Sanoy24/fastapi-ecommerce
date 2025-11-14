@@ -7,6 +7,7 @@ from app.db.database import Base
 
 
 class Order(Base):
+    """Order entity representing a customer's purchase and fulfillment state."""
     __tablename__ = "orders"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

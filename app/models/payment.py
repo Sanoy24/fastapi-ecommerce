@@ -6,6 +6,7 @@ from app.db.database import Base
 
 
 class Payment(Base):
+    """Payment entity tracking payment method, status, and transaction info."""
     __tablename__ = "payments"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

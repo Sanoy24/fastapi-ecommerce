@@ -12,11 +12,17 @@ from typing import List
 
 
 class ProductService:
+    """Business logic for products.
+
+    Orchestrates CRUD calls, applies validation and HTTP error mapping, and
+    returns Pydantic response models.
+    """
     def __init__(self, db: Session):
         self.db = db
         self.crud = ProductCrud(db=db)
 
     def create_product(self, create_dto: ProductCreate) -> ProductResponse:
+        """Create a product and return a validated response model."""
         try:
             result = self.crud.create_product(create_dto)
             return ProductResponse.model_validate(result)
@@ -34,6 +40,7 @@ class ProductService:
             )
 
     def get_product_by_slug(self, slug: str) -> ProductResponse:
+        """Retrieve a product by slug; 404 if not found."""
         product = self.crud.get_product_detail(slug)
         if not product:
             raise HTTPException(
@@ -42,6 +49,7 @@ class ProductService:
         return ProductResponse.model_validate(product)
 
     def get_product_by_id(self, id: int) -> ProductResponse:
+        """Retrieve a product by id; 404 if not found."""
         product = self.crud.get_product_by_id(id)
         if not product:
             raise HTTPException(
@@ -50,6 +58,7 @@ class ProductService:
         return ProductResponse.model_validate(product)
 
     def get_all_products(self) -> List[ProductResponse]:
+        """List all products as response models."""
         try:
             products = self.crud.get_all_products()
             return [ProductResponse.model_validate(p) for p in products]
@@ -61,6 +70,7 @@ class ProductService:
             )
 
     def update_product(self, id: int, update_dto: ProductUpdate) -> ProductResponse:
+        """Partially update a product; maps conflicts and not-found to HTTP codes."""
         try:
             updated = self.crud.update_product(id, update_dto)
             if not updated:
@@ -83,9 +93,28 @@ class ProductService:
             )
 
     def delete_product(self, id: int) -> None:
+        """Delete a product by id; 404 if missing."""
         deleted = self.crud.delete_product(id)
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
             )
         return None
+<<<<<<< Updated upstream
+=======
+
+    def get_products_by_category_id(self, category_id: int) -> List[ProductResponse]:
+        """List products belonging to a category by id."""
+        products = self.crud.get_products_by_category_id(category_id)
+        return [ProductResponse.model_validate(p) for p in products]
+
+    def get_products_by_category_slug(self, slug: str) -> List[ProductResponse]:
+        """List products belonging to a category by slug; 404 if category missing."""
+        category = CategoryCrud(self.db).get_category_by_slug(slug)
+        if category is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
+            )
+        products = self.crud.get_products_by_category_id(category.id)
+        return [ProductResponse.model_validate(p) for p in products]
+>>>>>>> Stashed changes

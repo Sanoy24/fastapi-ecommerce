@@ -6,6 +6,7 @@ from app.db.database import Base
 
 
 class Review(Base):
+    """Product review entity with rating and optional comment."""
     __tablename__ = "reviews"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

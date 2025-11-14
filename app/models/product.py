@@ -12,6 +12,7 @@ import datetime
 
 
 class Product(Base):
+    """Product entity representing items in the catalog."""
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

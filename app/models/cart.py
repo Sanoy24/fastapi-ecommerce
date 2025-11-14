@@ -6,6 +6,7 @@ from app.db.database import Base
 
 
 class Cart(Base):
+    """Shopping cart entity associated with a user or a session."""
     __tablename__ = "carts"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
