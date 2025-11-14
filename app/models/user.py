@@ -12,6 +12,7 @@ from app.db.database import Base
 
 
 class User(Base):
+    """User entity for authentication and profile data."""
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

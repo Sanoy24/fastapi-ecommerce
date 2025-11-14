@@ -1,15 +1,13 @@
+from typing import List
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from app.crud.product import ProductCrud
-from app.crud.category import CategoryCrud
-from app.schema.product_schema import (
-    ProductCreate,
-    ProductUpdate,
-    ProductResponse,
-)
+
 from app.core.exceptions import ProductException
 from app.core.logger import logger
-from typing import List
+from app.crud.category import CategoryCrud
+from app.crud.product import ProductCrud
+from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
 
 
 class ProductService:
@@ -18,6 +16,7 @@ class ProductService:
         self.crud = ProductCrud(db=db)
 
     def create_product(self, create_dto: ProductCreate) -> ProductResponse:
+        """Create a product and return a validated response model."""
         try:
             result = self.crud.create_product(create_dto)
             return ProductResponse.model_validate(result)
@@ -35,6 +34,7 @@ class ProductService:
             )
 
     def get_product_by_slug(self, slug: str) -> ProductResponse:
+        """Retrieve a product by slug; 404 if not found."""
         product = self.crud.get_product_detail(slug)
         if not product:
             raise HTTPException(
@@ -43,6 +43,7 @@ class ProductService:
         return ProductResponse.model_validate(product)
 
     def get_product_by_id(self, id: int) -> ProductResponse:
+        """Retrieve a product by id; 404 if not found."""
         product = self.crud.get_product_by_id(id)
         if not product:
             raise HTTPException(
@@ -51,6 +52,7 @@ class ProductService:
         return ProductResponse.model_validate(product)
 
     def get_all_products(self) -> List[ProductResponse]:
+        """List all products as response models."""
         try:
             products = self.crud.get_all_products()
             return [ProductResponse.model_validate(p) for p in products]
@@ -62,6 +64,7 @@ class ProductService:
             )
 
     def update_product(self, id: int, update_dto: ProductUpdate) -> ProductResponse:
+        """Partially update a product; maps conflicts and not-found to HTTP codes."""
         try:
             updated = self.crud.update_product(id, update_dto)
             if not updated:
@@ -84,6 +87,7 @@ class ProductService:
             )
 
     def delete_product(self, id: int) -> None:
+        """Delete a product by id; 404 if missing."""
         deleted = self.crud.delete_product(id)
         if not deleted:
             raise HTTPException(

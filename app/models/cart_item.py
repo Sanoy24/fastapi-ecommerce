@@ -5,6 +5,7 @@ from app.db.database import Base
 
 
 class CartItem(Base):
+    """Cart line item representing a product and quantity in a cart."""
     __tablename__ = "cartitems"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

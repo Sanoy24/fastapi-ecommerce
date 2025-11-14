@@ -1,13 +1,14 @@
 from pydantic import HttpUrl
-from sqlalchemy.orm import Session
-from app.schema.product_schema import ProductCreate, ProductUpdate
-from app.models.product import Product
-from app.models.category import Category
-from app.core.exceptions import ProductException
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
-from app.utils.generate_slug import generate_slug, generate_sku
+from sqlalchemy.orm import Session
+
+from app.core.exceptions import ProductException
 from app.core.logger import logger
-from sqlalchemy import select, update, delete
+from app.models.category import Category
+from app.models.product import Product
+from app.schema.product_schema import ProductCreate, ProductUpdate
+from app.utils.generate_slug import generate_sku, generate_slug
 
 
 class ProductCrud:
@@ -15,7 +16,7 @@ class ProductCrud:
         self.db = db
 
     def create_product(self, create_dto: ProductCreate) -> Product:
-        """Create Product"""
+        """Create a new product with generated slug and sku."""
         try:
             create_data = create_dto.model_dump()
 
@@ -41,6 +42,7 @@ class ProductCrud:
             raise ProductException(str(e)) from e
 
     def get_product_detail(self, slug: str) -> Product:
+        """Retrieve a product by slug; returns None if not found."""
         stmt = select(Product).where(Product.slug == slug)
         product = self.db.scalar(stmt)
         if not product:
@@ -48,10 +50,12 @@ class ProductCrud:
         return product
 
     def get_product_by_id(self, id: int) -> Product | None:
+        """Retrieve a product by id; returns None if not found."""
         stmt = select(Product).where(Product.id == id)
         return self.db.scalar(stmt)
 
     def get_all_products(self) -> list[Product]:
+        """List all products ordered by id."""
         stmt = select(Product).order_by(Product.id)
         return self.db.scalars(stmt).all()
 
@@ -73,6 +77,7 @@ class ProductCrud:
         return self.db.scalars(stmt).all()
 
     def update_product(self, id: int, update_dto: ProductUpdate) -> Product | None:
+        """Partially update product; auto-generate slug when name changes."""
         try:
             update_data = update_dto.model_dump(exclude_unset=True)
 
@@ -82,7 +87,7 @@ class ProductCrud:
             if isinstance(update_data.get("image_url"), HttpUrl):
                 update_data["image_url"] = str(update_data["image_url"])
 
-            if "name" in update_data:
+            if "name" in update_data and "slug" not in update_data:
                 update_data["slug"] = generate_slug(self.db, update_data["name"])
 
             stmt = (
@@ -100,6 +105,7 @@ class ProductCrud:
             raise ProductException(str(e)) from e
 
     def delete_product(self, id: int) -> bool:
+        """Delete product by id. Returns True if deleted else False."""
         stmt = delete(Product).where(Product.id == id)
         result = self.db.execute(stmt)
         if result.rowcount == 0:

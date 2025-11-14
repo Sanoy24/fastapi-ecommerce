@@ -10,6 +10,7 @@ from app.utils.generate_slug import generate_slug
 
 
 class CategoryCrud:
+    """Data access layer for Category entities."""
     def __init__(self, db: Session):
         self.db = db
 
@@ -17,6 +18,7 @@ class CategoryCrud:
     # crud.py
 
     def create_category(self, create_dto: CreateCategory) -> Category:
+        """Create a new category and return the persisted model."""
         try:
             category_data = create_dto.model_dump()
 
@@ -37,17 +39,17 @@ class CategoryCrud:
 
     # get category
     def get_category_by_id(self, id: int) -> Category | None:
-        """Retrieves a Category by its primary key (id)."""
+        """Retrieve a category by primary key (id). Returns None if missing."""
         stmt = select(Category).where(Category.id == id)
         return self.db.scalar(stmt)
 
     def get_category_by_slug(self, slug: str):
-        """Retrieves a Category by its unique slug."""
+        """Retrieve a category by unique slug."""
         stmt = select(Category).where(Category.slug == slug)
         return self.db.scalar(stmt)
 
     def update_category(self, id: int, update_dto: UpdateCategory) -> Category:
-        """Updates an existing Category record efficiently."""
+        """Partially update a category; returns the updated model."""
         try:
             update_data = update_dto.model_dump(exclude_unset=True)
 
@@ -77,7 +79,7 @@ class CategoryCrud:
 
     # delete category
     def delete_category(self, id: int) -> bool:
-        """Deletes a Category record."""
+        """Delete a category by id. Returns True if deleted else False."""
         stmt = delete(Category).where(Category.id == id)
         result = self.db.execute(stmt)
         if result.rowcount == 0:
@@ -86,7 +88,7 @@ class CategoryCrud:
         return True
 
     def get_all_categories(self) -> list[Category]:
-        """Get all categories"""
+        """List all categories ordered by id."""
         stmt = select(Category).order_by(Category.id)
         result = self.db.scalars(stmt).all()
         return result

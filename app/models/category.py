@@ -5,6 +5,7 @@ from app.db.database import Base
 
 
 class Category(Base):
+    """Category entity supporting nested categories and product grouping."""
     __tablename__ = "categories"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

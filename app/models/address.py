@@ -6,6 +6,7 @@ from app.db.database import Base
 
 
 class Address(Base):
+    """Address entity for user shipping and billing addresses."""
     __tablename__ = "addresses"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
