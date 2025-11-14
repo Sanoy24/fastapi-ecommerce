@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.crud.product import ProductCrud
+from app.crud.category import CategoryCrud
 from app.schema.product_schema import (
     ProductCreate,
     ProductUpdate,
@@ -89,3 +90,16 @@ class ProductService:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
             )
         return None
+
+    def get_products_by_category_id(self, category_id: int) -> List[ProductResponse]:
+        products = self.crud.get_products_by_category_id(category_id)
+        return [ProductResponse.model_validate(p) for p in products]
+
+    def get_products_by_category_slug(self, slug: str) -> List[ProductResponse]:
+        category = CategoryCrud(self.db).get_category_by_slug(slug)
+        if category is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
+            )
+        products = self.crud.get_products_by_category_id(category.id)
+        return [ProductResponse.model_validate(p) for p in products]

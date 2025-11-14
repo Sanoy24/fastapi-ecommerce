@@ -2,6 +2,7 @@ from pydantic import HttpUrl
 from sqlalchemy.orm import Session
 from app.schema.product_schema import ProductCreate, ProductUpdate
 from app.models.product import Product
+from app.models.category import Category
 from app.core.exceptions import ProductException
 from sqlalchemy.exc import IntegrityError
 from app.utils.generate_slug import generate_slug, generate_sku
@@ -25,7 +26,7 @@ class ProductCrud:
             if not product_name:
                 raise ValueError("Product name is required for slug generation.")
 
-            gen_slug = generate_slug(self.db, product_name)
+            gen_slug = generate_slug(self.db, product_name, context="product")
             gen_sku = generate_sku(product_name)
 
             product = Product(**create_data, slug=gen_slug, sku=gen_sku)
@@ -52,6 +53,23 @@ class ProductCrud:
 
     def get_all_products(self) -> list[Product]:
         stmt = select(Product).order_by(Product.id)
+        return self.db.scalars(stmt).all()
+
+    def get_products_by_category_id(self, category_id: int) -> list[Product]:
+        stmt = (
+            select(Product)
+            .where(Product.category_id == category_id)
+            .order_by(Product.id)
+        )
+        return self.db.scalars(stmt).all()
+
+    def get_products_by_category_slug(self, slug: str) -> list[Product]:
+        stmt = (
+            select(Product)
+            .join(Category, Product.category_id == Category.id)
+            .where(Category.slug == slug)
+            .order_by(Product.id)
+        )
         return self.db.scalars(stmt).all()
 
     def update_product(self, id: int, update_dto: ProductUpdate) -> Product | None:
