@@ -1,3 +1,4 @@
+from pydantic import HttpUrl
 from sqlalchemy.orm import Session
 from app.core.exceptions import CategoryCreationError, CategoryUpdateError
 from app.models.category import Category
@@ -5,6 +6,7 @@ from app.schema.category_schema import CategoryPublic, CreateCategory, UpdateCat
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from app.core.logger import logger
+from app.utils.generate_slug import generate_slug
 
 
 class CategoryCrud:
@@ -17,6 +19,13 @@ class CategoryCrud:
     def create_category(self, create_dto: CreateCategory) -> Category:
         try:
             category_data = create_dto.model_dump()
+
+            if isinstance(category_data.get("image_url"), HttpUrl):
+                category_data["image_url"] = str(category_data["image_url"])
+
+            slug = generate_slug(self.db, category_data["name"], "category")
+
+            category_data["slug"] = slug
             category = Category(**category_data)
             self.db.add(category)
             self.db.commit()
