@@ -1,21 +1,22 @@
-from sqlalchemy import Column, ForeignKey, Integer, DateTime,Integer, func
-from sqlalchemy.orm import relationship
+from sqlalchemy import Integer, ForeignKey, DateTime, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from datetime import datetime
 from app.db.database import Base
 
 
 class CartItem(Base):
     __tablename__ = "cartitems"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    cart_id = Column(
-        Integer, ForeignKey("carts.id", ondelete="CASCADE"), nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    cart_id: Mapped[int] = mapped_column(
+        ForeignKey("carts.id", ondelete="CASCADE"), nullable=False
     )
-    product_id = Column(
-        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
     )
-    quantity = Column(Integer, default=1)
-    added_at = Column(DateTime, default=func.current_timestamp())
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=func.current_timestamp())
 
     # Relationships
-    cart = relationship("Cart", back_populates="cart_items")
-    product = relationship("Product", back_populates="cart_items")
+    cart: Mapped["Cart"] = relationship("Cart", back_populates="cart_items")
+    product: Mapped["Product"] = relationship("Product", back_populates="cart_items")

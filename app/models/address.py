@@ -1,35 +1,30 @@
-from sqlalchemy import (
-    Column,
-    Integer,
-    ForeignKey,
-    Text,
-    String,
-    Boolean,
-    DateTime,
-    func,
-)
-from sqlalchemy.orm import relationship
+from sqlalchemy import Integer, ForeignKey, Text, String, Boolean, DateTime, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Optional
+from datetime import datetime
 from app.db.database import Base
 
 
 class Address(Base):
     __tablename__ = "addresses"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    type = Column(String(20), nullable=False)
-    street = Column(Text)
-    city = Column(String(100))
-    state = Column(String(100))
-    postal_code = Column(String(20))
-    country = Column(String(100))
-    is_default = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
-    updated_at = Column(
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    street: Mapped[Optional[str]] = mapped_column(Text)
+    city: Mapped[Optional[str]] = mapped_column(String(100))
+    state: Mapped[Optional[str]] = mapped_column(String(100))
+    postal_code: Mapped[Optional[str]] = mapped_column(String(20))
+    country: Mapped[Optional[str]] = mapped_column(String(100))
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.now()
     )
 
     # Relationships
-    user = relationship("User", back_populates="addresses")
+    user: Mapped["User"] = relationship("User", back_populates="addresses")

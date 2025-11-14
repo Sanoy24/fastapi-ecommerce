@@ -1,35 +1,28 @@
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    ForeignKey,
-    Integer,
-    Numeric,
-    DateTime,
-)
+from sqlalchemy import Integer, String, ForeignKey, Numeric, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from datetime import datetime
 from app.db.database import Base
 
 
 class Payment(Base):
     __tablename__ = "payments"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    order_id = Column(
-        Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
     )
-    payment_method = Column(
+    payment_method: Mapped[str] = mapped_column(
         SQLEnum("credit_card", "paypal", "bank_transfer", name="payment_method"),
         nullable=False,
     )
-    amount = Column(Numeric(10, 2), nullable=False)
-    status = Column(
+    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    status: Mapped[str] = mapped_column(
         SQLEnum("pending", "completed", "failed", name="payment_status"),
         default="pending",
     )
-    transaction_id = Column(String(100))
-    paid_at = Column(DateTime, nullable=True)
+    transaction_id: Mapped[str] = mapped_column(String(100))
+    paid_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
     # Relationships
-    order = relationship("Order", back_populates="payments")
+    order: Mapped["Order"] = relationship("Order", back_populates="payments")
