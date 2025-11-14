@@ -7,6 +7,9 @@ import uuid
 
 
 def generate_slug(db: Session, name: str):
+    """
+    generate slug for product
+    """
     base_slug = slugify(name, lowercase=True)
     stmt = select(Product.slug).where(Product.slug.like(f"{base_slug}%"))
     existing_slugs = set(db.scalars(stmt).all())
