@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -8,6 +8,7 @@ from app.core.logger import logger
 from app.crud.category import CategoryCrud
 from app.crud.product import ProductCrud
 from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
+from app.schema.common_schema import PaginatedResponse
 
 
 class ProductService:
@@ -51,11 +52,30 @@ class ProductService:
             )
         return ProductResponse.model_validate(product)
 
-    def get_all_products(self) -> List[ProductResponse]:
+    def get_all_products(
+        self,
+        page: Optional[int],
+        per_page: Optional[int],
+        search: str | None = None,
+        category_id: int | None = None,
+        min_price: float | None = None,
+        max_price: float | None = None,
+        sort_by: str | None = "id",
+        sort_order: str | None = "asc",
+    ) -> PaginatedResponse[ProductResponse]:
         """List all products as response models."""
         try:
-            products = self.crud.get_all_products()
-            return [ProductResponse.model_validate(p) for p in products]
+            products = self.crud.get_all_products(
+                page,
+                per_page,
+                search,
+                category_id,
+                min_price,
+                max_price,
+                sort_by,
+                sort_order,
+            )
+            return products
         except Exception as e:
             logger.info(f"exception: {e}")
             raise HTTPException(

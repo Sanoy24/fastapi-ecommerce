@@ -1,5 +1,5 @@
 from pydantic import HttpUrl
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -7,8 +7,13 @@ from app.core.exceptions import ProductException
 from app.core.logger import logger
 from app.models.category import Category
 from app.models.product import Product
-from app.schema.product_schema import ProductCreate, ProductUpdate
+from app.schema.common_schema import PaginatedResponse, PaginationLinks, PaginationMeta
+from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
 from app.utils.generate_slug import generate_sku, generate_slug
+from typing import Literal
+
+allowed_sort_order = Literal["asc", "desc"]
+allowed_sort_by = Literal["id", "price", "name", "created_at"]
 
 
 class ProductCrud:
@@ -54,10 +59,100 @@ class ProductCrud:
         stmt = select(Product).where(Product.id == id)
         return self.db.scalar(stmt)
 
-    def get_all_products(self) -> list[Product]:
+    def get_all_products(
+        self,
+        page: int = 1,
+        per_page: int = 10,
+        search: str | None = None,
+        category_id: str | None = None,
+        min_price: float | None = None,
+        max_price: float | None = None,
+        sort_by: allowed_sort_by | None = "id",
+        sort_order: allowed_sort_by = "asc",
+    ) -> PaginatedResponse[ProductResponse]:
         """List all products ordered by id."""
-        stmt = select(Product).order_by(Product.id)
-        return self.db.scalars(stmt).all()
+        logger.info(f"page: {page} - per_page: {per_page}")
+
+        page = max(page, 1)
+        per_page = max(min(per_page, 100), 1)
+
+        # base query
+        stmt = select(Product).where(Product.is_active == True)
+
+        # filters
+        if search:
+            stmt = stmt.where(
+                Product.name.like(f"%{search}%")
+                | Product.description.like(f"%{search}")
+            )
+
+        if category_id:
+            stmt = stmt.where(Product.category_id == category_id)
+        if min_price:
+            stmt = stmt.where(Product.price >= min_price)
+        if max_price:
+            stmt = stmt.where(Product.price <= max_price)
+
+        # sorting
+
+        allowed_sorting_fields = {
+            "id": Product.id,
+            "name": Product.name,
+            "price": Product.price,
+            "created_at": Product.created_at,
+        }
+
+        sort_field = allowed_sorting_fields.get(sort_by, Product.id)
+        if sort_order == "desc":
+            stmt = stmt.order_by(sort_field.desc())
+        else:
+            stmt = stmt.order_by(sort_field.asc())
+
+        # count total items
+        count_stmt = stmt.with_only_columns(func.count())
+        total_items = self.db.scalar(count_stmt)
+
+        # total_items = self.db.scalar(
+        #     select(func.count()).select_from(Product).where(Product.is_active == True)
+        # )
+
+        offset = (page - 1) * per_page
+
+        items = self.db.scalars(stmt.offset(offset).limit(per_page)).all()
+
+        total_pages = (total_items + per_page - 1) // per_page
+        from_item = offset + 1 if items else None
+        to_item = offset + len(items) if items else None
+
+        meta = PaginationMeta(
+            current_page=page,
+            per_page=per_page,
+            total_pages=total_pages,
+            total_items=total_items,
+            from_item=from_item,
+            to_item=to_item,
+        )
+
+        # Generated links (HATEOAS)
+        base = "/products"
+
+        links = PaginationLinks(
+            self=f"{base}?page={page}&per_page={per_page}",
+            first=f"{base}?page=1&per_page={per_page}",
+            last=f"{base}?page={total_pages}&per_page={per_page}",
+            prev=f"{base}?page={page - 1}&per_page={per_page}" if page > 1 else None,
+            next=(
+                f"{base}?page={page + 1}&per_page={per_page}"
+                if page < total_pages
+                else None
+            ),
+        )
+
+        return PaginatedResponse(
+            data=items,
+            meta=meta,
+            links=links,
+        )
 
     def get_products_by_category_id(self, category_id: int) -> list[Product]:
         stmt = (
