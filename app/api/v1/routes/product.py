@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, Path, status
+from fastapi import APIRouter, Depends, Path, Query, status
+from app.schema.common_schema import PaginatedResponse
 from app.schema.product_schema import ProductCreate, ProductUpdate, ProductResponse
 from app.services.product_service import ProductService
 from app.dependencies import get_product_service_dep, require_admin
 from app.schema.user_schema import UserPublic
 from typing import Annotated, List
 from app.core.logger import logger
+import enum
 
 router = APIRouter(tags=["Product"])
 product_dependency = Annotated[ProductService, Depends(get_product_service_dep)]
@@ -25,11 +27,22 @@ async def create_prodcut(
     return product
 
 
-@router.get("", response_model=List[ProductResponse])
+@router.get("", response_model=PaginatedResponse[ProductResponse])
 async def get_all_products(
     product_service: product_dependency,
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[
+        int,
+        Query(ge=1, le=100),
+    ] = 10,
+    search: str | None = Query(None),
+    category_id: int | None = Query(None),
+    min_price: float | None = Query(None),
+    max_price: float | None = Query(None),
+    sort_by: str = Query("id", enum=["id", "name", "price", "created_at"]),
+    sort_order: str = Query("asc", enum=["asc", "desc"]),
 ) -> List[ProductResponse]:
-    return product_service.get_all_products()
+    return product_service.get_all_products(page, per_page)
 
 
 @router.get("/{slug}", response_model=ProductResponse)
