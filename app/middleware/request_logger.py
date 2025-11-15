@@ -11,6 +11,9 @@ SENSITIVE_HEADERS = {"authorization", "cookie", "set-cookie"}
 MAX_BODY_LOG_BYTES = 1024 * 16  # 16 KB - cap how much of the body we log
 SENSITIVE_BODY_KEYS = {"password", "token", "access_token", "refresh_token"}
 
+# Paths to exclude from logging
+EXCLUDED_PATHS = {"/api/v1/openapi.json", "/docs", "/redoc"}
+
 
 def _safe_json_loads(b: bytes) -> Any:
     try:
@@ -60,6 +63,12 @@ class LoggingMiddleware:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             # Non-HTTP (websocket, etc.) — pass through
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        if path in EXCLUDED_PATHS:
+            # Skip logging for excluded paths
             await self.app(scope, receive, send)
             return
 
