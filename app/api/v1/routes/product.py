@@ -42,7 +42,9 @@ async def get_all_products(
     sort_by: str = Query("id", enum=["id", "name", "price", "created_at"]),
     sort_order: str = Query("asc", enum=["asc", "desc"]),
 ) -> List[ProductResponse]:
-    return product_service.get_all_products(page, per_page)
+    return product_service.get_all_products(
+        page, per_page, search, category_id, min_price, max_price, sort_by, sort_order
+    )
 
 
 @router.get("/{slug}", response_model=ProductResponse)
