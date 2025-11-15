@@ -7,6 +7,8 @@ from app.middleware.request_logger import LoggingMiddleware
 from app.core.logger import logger
 from pydantic import BaseModel
 
+from app.utils.seed import seed_product
+
 
 class RootResponse(BaseModel):
     message: str
@@ -108,3 +110,5 @@ app.include_router(router=healthcheck.router, prefix="/healthcheck")
 app.include_router(router=user.router, prefix="/users")
 app.include_router(router=category.router, prefix="/category")
 app.include_router(router=product.router, prefix="/product")
+
+# seed_product()

@@ -72,6 +72,7 @@ class ProductCrud:
     ) -> PaginatedResponse[ProductResponse]:
         """List all products ordered by id."""
         logger.info(f"page: {page} - per_page: {per_page}")
+        logger.warning(f"min price - {min_price} | max price - {max_price}")
 
         page = max(page, 1)
         per_page = max(min(per_page, 100), 1)
