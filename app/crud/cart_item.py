@@ -1,7 +1,7 @@
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ProductException
@@ -16,136 +16,110 @@ class CartCrud:
         self.db = db
         self.prod_crud = ProductCrud(db)
 
-    def get_or_create_cart(self, user_id: Optional[int], session_id: Optional[str]):
-        if user_id:
-            stmt = select(Cart).where(Cart.user_id == user_id)
-            cart = self.db.scalar(stmt)
-            if cart:
-                return cart
-            cart = Cart(user_id=user_id)
-            self.db.add(cart)
-            self.db.commit()
-            self.db.refresh(cart)
-            return cart
-        else:
-            stmt = select(Cart).where(Cart.session_id == session_id)
-            cart = self.db.scalar(stmt)
-            if cart:
-                return cart
-            cart = Cart(session_id=session_id)
-            return cart
+    def get_cart_by_user_id(self, user_id: int) -> Cart | None:
+        stmt = select(Cart).where(Cart.user_id == user_id)
+        cart = self.db.scalar(stmt)
+        if not cart:
+            return None
+        return cart
 
-    def add_item(self, cart: Cart, data: CartItemCreate):
-        product = self.prod_crud.get_product_by_id(data.product_id)
-        if not product:
-            raise ProductException("product not found")
+    def get_cart_by_session_id(self, session_id: int) -> Cart | None:
+        stmt = select(Cart).where(Cart.session_id == session_id)
+        cart = self.db.scalar(stmt)
+        if not cart:
+            return None
+        return cart
 
+    def create_cart_by_user_id(self, user_id: int) -> Cart:
+        cart = Cart(user_id=user_id)
+        self.db.add(cart)
+        self.db.commit()
+        self.db.refresh(cart)
+        return cart
+
+    def create_cart_by_session_id(self, session_id: int) -> Cart:
+        cart = Cart(session_id=session_id)
+        self.db.add(cart)
+        self.db.commit()
+        self.db.refresh(cart)
+        return cart
+
+    def get_cart_item_by_product(self, cart_id: int, product_id: int):
         stmt = select(CartItem).where(
-            CartItem.cart_id == cart.id, CartItem.product_id == data.product_id
+            CartItem.cart_id == cart_id, CartItem.product_id == product_id
         )
 
-        existing = self.db.scalar(stmt)
-        if existing:
-            existing.quantity += data.quantity
-            self.db.commit()
-            self.db.refresh(existing)
-            return existing
+        cart_item = self.db.scalar(stmt)
+        if not cart_item:
+            return None
+        return cart_item
 
-        new_item = CartItem(
-            cart_id=cart.id, product_id=data.product_id, quantity=data.quantity
+    def update_existing_cart_item(
+        self, cart_id: int, product_id: int, quantity: int
+    ) -> CartItem:
+        stmt = (
+            update(CartItem)
+            .where(CartItem.cart_id == cart_id, CartItem.product_id == product_id)
+            .values(quantity=CartItem.quantity + quantity)
+            .returning(CartItem)
         )
+
+        updated = self.db.execute(stmt).scalar_one_or_none()
+        self.db.commit()
+        return updated
+
+    def add_new_cart_item(
+        self, cart_id: int, product_id: int, quantity: int
+    ) -> CartItem:
+        new_item = CartItem(cart_id=cart_id, product_id=product_id, quantity=quantity)
         self.db.add(new_item)
         self.db.commit()
         self.db.refresh(new_item)
         return new_item
 
-    def update_item(self, cart: Cart, item_id: int, data: CartItemUpdate):
+    def get_cart_item_by_cart_id(self, cart_id: int, item_id: int) -> CartItem:
         stmt = select(CartItem).where(
-            CartItem.id == item_id, CartItem.cart_id == cart.id
+            CartItem.id == item_id, CartItem.cart_id == cart_id
         )
+        result = self.db.scalar(stmt)
+        if not result:
+            return None
+        return result
 
-        item = self.db.scalar(stmt)
-        if not item:
-            raise HTTPException(
-                status=status.HTTP_404_NOT_FOUND, detail="Item not found"
-            )
-        item.quantity = data.quantity
+    def update_item(self, cart_id: int, item_id: int, data: CartItemUpdate) -> CartItem:
+        stmt = (
+            update(CartItem)
+            .where(CartItem.id == item_id, CartItem.cart_id == cart_id)
+            .values(quantity=data.quantity)
+            .returning(CartItem)
+        )
+        updated = self.db.execute(stmt).scalar_one_or_none()
         self.db.commit()
-        self.db.refresh(item)
-        return item
+        return updated
 
-    def remove_item(self, cart: Cart, item_id: int):
-        stmt = select(CartItem).where(
-            CartItem.id == item_id, CartItem.cart_id == cart.id
+    def remove_item(self, cart_id: int, item_id: int):
+        stmt = delete(CartItem).where(
+            CartItem.id == item_id, CartItem.cart_id == cart_id
         )
-
-        item = self.db.scalar(stmt)
-
-        if not item:
-            raise HTTPException(
-                status=status.HTTP_404_NOT_FOUND, detail="Item not found"
-            )
-        self.db.delete(item)
+        result = self.db.execute(stmt)
+        if result.rowcount == 0:
+            return False
         self.db.commit()
         return True
 
-    def get_cart_details(self, cart: Cart):
-        items = []
-        subtotal = 0
-        total_items = 0
+    def remove_anon_cart(self, session_id: str):
+        stmt = delete(Cart).where(Cart.session_id == session_id)
+        result = self.db.execute(stmt)
+        if result.rowcount == 0:
+            return False
+        self.db.commit()
+        # return True
 
-        for item in cart.cart_items:
-            product = item.product
-            item_sub = product.price * product.quantity
-
-            items.append(
-                {
-                    "id": item.id,
-                    "product_id": product.id,
-                    "quantity": item.quantity,
-                    "product_name": product.name,
-                    "unit_price": product.price,
-                    "subtotal": item_sub,
-                }
-            )
-
-            subtotal += item_sub
-            total_items += item.quantity
-
-            return {
-                "id": cart.id,
-                "items": items,
-                "subtotal": subtotal,
-                "total_items": total_items,
-            }
-
-    def merge_carts(self, db: Session, user_id: int, session_id: str):
-        stmt_user_cart = select(Cart).where(Cart.user_id == user_id)
-        stmt_anon_cart = select(Cart).where(Cart.session_id == session_id)
-
-        user_cart = self.db.scalar(stmt_user_cart)
-        anon_cart = self.db.scalar(stmt_anon_cart)
-
-        if not anon_cart:
-            return
-
-        if not user_cart:
-            anon_cart.user_id = user_id
-            anon_cart.session_id = None
-            self.db.commit()
-            return
-
-        for item in anon_cart.cart_items:
-            stmt = select(CartItem).where(
-                CartItem.cart_id == user_cart.id, CartItem.product_id == item.product_id
-            )
-
-            existing = self.db.scalar(stmt)
-
-            if existing:
-                existing.quantity += item.quantity
-            else:
-                item.cart_id = user_cart.id
-
-        self.db.delete(anon_cart)
+    def update_anon_cart_to_user_cart(self, user_id: int, session_id: str):
+        stmt = (
+            update(Cart)
+            .where(Cart.session_id == session_id)
+            .values(user_id=user_id, session_id=None)
+        )
+        self.db.execute(stmt).scalar_one_or_none()
         self.db.commit()

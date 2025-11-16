@@ -15,7 +15,7 @@ class CartItemResponse(BaseModel):
     id: int
     product_id: int
     quantity: int
-    product_name: int
+    product_name: str  # ✅ FIXED: should be string
     unit_price: float
     subtotal: float
 
@@ -26,4 +26,6 @@ class CartResponse(BaseModel):
     id: int
     items: List[CartItemResponse]
     total_items: int
-    sub_total: float
+    subtotal: float  # ✅ FIXED: name must match service output
+
+    model_config = {"from_attributes": True}

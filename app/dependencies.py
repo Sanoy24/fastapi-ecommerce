@@ -1,7 +1,8 @@
 from app.db.database import SessionLocal
-from typing import Generator
+from typing import Generator, Optional
 from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException, status
+from app.services.cart_service import CartService
 from app.services.user_service import UserService
 from app.services.address_service import AddressService
 from app.services.category_service import CategoryService
@@ -53,6 +54,10 @@ def get_product_service_dep(db: Annotated[Session, Depends(get_db)]) -> ProductS
     return ProductService(db=db)
 
 
+def get_cart_service_dep(db: Annotated[Session, Depends(get_db)]) -> CartService:
+    return CartService(db=db)
+
+
 async def get_current_user(
     user_service: Annotated[UserService, Depends(get_user_service_dep)],
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(oauth_scheme)],
@@ -98,3 +103,25 @@ def require_admin(
             status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required"
         )
     return current_user
+
+
+async def get_optional_user(
+    user_service: Annotated[UserService, Depends(get_user_service_dep)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(oauth_scheme)],
+) -> UserPublic:
+
+    if not credentials:
+        return None
+
+    try:
+        decoded = decode_access_token(credentials.credentials)
+        user_id = decoded.get("sub")
+
+        if not user_id:
+            return None
+
+        user = user_service.get_user_by_id(id=int(user_id))
+        return UserPublic.model_validate(user)
+
+    except Exception:
+        return None
