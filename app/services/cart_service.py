@@ -9,32 +9,38 @@ from app.crud.product import ProductCrud
 from app.crud.cart_item import CartCrud
 from app.models.cart import Cart
 from app.schema.cart_schema import CartItemCreate, CartItemUpdate
+from app.core.logger import logger
 
 
 class CartService:
     def __init__(self, db: Session):
         self.db = db
         self.cart_crud = CartCrud(db=db)
-        self.prod_crud = ProductCrud(db)
+        self.prod_crud = ProductCrud(db=db)
 
     def get_or_create_cart(self, user_id: Optional[int], session_id: Optional[str]):
-        if user_id:
-            cart = self.cart_crud.get_cart_by_user_id(user_id=user_id)
-            if cart:
+        try:
+            if user_id:
+                cart = self.cart_crud.get_cart_by_user_id(user_id=user_id)
+                if cart:
+                    return cart
+                cart = self.cart_crud.create_cart_by_user_id(user_id=user_id)
                 return cart
-            cart = self.cart_crud.create_cart_by_user_id(user_id=user_id)
-            return cart
-        else:
-            cart = self.cart_crud.get_cart_by_session_id(session_id=session_id)
-            if cart:
+            else:
+                cart = self.cart_crud.get_cart_by_session_id(session_id=session_id)
+                if cart:
+                    return cart
+                cart = self.cart_crud.create_cart_by_session_id(session_id=session_id)
                 return cart
-            cart = self.cart_crud.create_cart_by_session_id(session_id=session_id)
-            return cart
+        except Exception as e:
+            logger.info(f"exception: {e}")
 
     def add_item(self, cart: Cart, data: CartItemCreate):
         product = self.prod_crud.get_product_by_id(data.product_id)
         if not product:
             raise ProductException("product not found")
+        if product.stock_quantity < data.quantity:
+            raise ProductException("Product out of stock")
 
         # stmt = select(CartItem).where(
         #     CartItem.cart_id == cart.id, CartItem.product_id == data.product_id
@@ -78,7 +84,7 @@ class CartService:
 
         for item in cart.cart_items:
             product = item.product
-            item_sub = product.price * product.quantity
+            item_sub = product.price * item.quantity
 
             items.append(
                 {
@@ -105,6 +111,9 @@ class CartService:
 
         user_cart = self.cart_crud.get_cart_by_user_id(user_id=user_id)
         anon_cart = self.cart_crud.get_cart_by_session_id(session_id=session_id)
+
+        logger.info(f"info user cart: {user_cart}")
+        logger.info(f"anon cart: {anon_cart}")
 
         if not anon_cart:
             return

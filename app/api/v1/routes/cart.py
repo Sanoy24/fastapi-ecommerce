@@ -7,6 +7,7 @@ from app.schema.user_schema import UserPublic
 from app.services.cart_service import CartService
 from app.schema.cart_schema import CartItemCreate, CartItemUpdate, CartResponse
 from app.utils.session import generate_session_id
+from app.core.logger import logger
 
 router = APIRouter(tags=["Cart"])
 
@@ -66,11 +67,13 @@ async def update_item(
 ):
     if current_user:
         cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
+        logger.info("cart with user: {cart}")
     else:
         session_id = request.cookies.get("session_id")
+        logger.info(f"we are using session: {session_id}")
         cart = cart_service.get_or_create_cart(user_id=None, session_id=session_id)
 
-    item = cart_service.update_item(cart, item_id, data.quantity)
+    item = cart_service.update_item(cart, item_id, data)
     return {"message": "Item updated", "item_id": item.id}
 
 
