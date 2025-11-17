@@ -8,3 +8,7 @@ class CategoryUpdateError(Exception):
 
 class ProductException(Exception):
     pass
+
+
+class OrderException(Exception):
+    pass

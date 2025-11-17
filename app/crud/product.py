@@ -208,3 +208,12 @@ class ProductCrud:
             return False
         self.db.commit()
         return True
+
+    def deduct_stock(self, product_id: int, item_quantity: int):
+        stmt = (
+            update(Product)
+            .where(Product.id == product_id)
+            .values(stock_quantity=Product.stock_quantity - item_quantity)
+            .returning(Product.id)
+        )
+        self.db.execute(stmt).scalar_one_or_none()

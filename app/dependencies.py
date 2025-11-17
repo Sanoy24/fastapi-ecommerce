@@ -6,6 +6,7 @@ from app.services.cart_service import CartService
 from app.services.user_service import UserService
 from app.services.address_service import AddressService
 from app.services.category_service import CategoryService
+from app.services.order_service import OrderService
 from app.services.product_service import ProductService
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Annotated
@@ -58,6 +59,10 @@ def get_cart_service_dep(db: Annotated[Session, Depends(get_db)]) -> CartService
     return CartService(db=db)
 
 
+def get_order_service_dep(db: Annotated[Session, Depends(get_db)]) -> OrderService:
+    return OrderService(db=db)
+
+
 async def get_current_user(
     user_service: Annotated[UserService, Depends(get_user_service_dep)],
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(oauth_scheme)],
@@ -74,6 +79,7 @@ async def get_current_user(
 
     try:
         decoded_token = decode_access_token(token=credentials.credentials)
+        logger.info(f"decoded token: {decoded_token}")
 
         user_id = decoded_token.get("sub")
 
