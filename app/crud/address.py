@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from app.models.address import Address
 from sqlalchemy.orm import Session
 from app.schema.address_schema import AddressCreate, AddressUpdate, AddressPublic
