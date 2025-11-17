@@ -2,13 +2,14 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.exceptions import ProductException
 from app.crud.product import ProductCrud
 from app.models.cart import Cart
 from app.models.cart_item import CartItem
 from app.schema.cart_schema import CartItemCreate, CartItemUpdate
+from app.core.logger import logger
 
 
 class CartCrud:
@@ -17,14 +18,22 @@ class CartCrud:
         self.prod_crud = ProductCrud(db)
 
     def get_cart_by_user_id(self, user_id: int) -> Cart | None:
-        stmt = select(Cart).where(Cart.user_id == user_id)
+        stmt = (
+            select(Cart)
+            .where(Cart.user_id == user_id)
+            .options(selectinload(Cart.cart_items).selectinload(CartItem.product))
+        )
         cart = self.db.scalar(stmt)
         if not cart:
             return None
         return cart
 
     def get_cart_by_session_id(self, session_id: int) -> Cart | None:
-        stmt = select(Cart).where(Cart.session_id == session_id)
+        stmt = (
+            select(Cart)
+            .where(Cart.session_id == session_id)
+            .options(selectinload(Cart.cart_items).selectinload(CartItem.product))
+        )
         cart = self.db.scalar(stmt)
         if not cart:
             return None
@@ -116,10 +125,12 @@ class CartCrud:
         # return True
 
     def update_anon_cart_to_user_cart(self, user_id: int, session_id: str):
+        logger.info(f"update anon cart to user cart: {user_id}")
         stmt = (
             update(Cart)
             .where(Cart.session_id == session_id)
             .values(user_id=user_id, session_id=None)
+            .returning(Cart.id)
         )
         self.db.execute(stmt).scalar_one_or_none()
         self.db.commit()
