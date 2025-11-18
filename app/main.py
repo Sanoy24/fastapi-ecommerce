@@ -86,7 +86,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     return JSONResponse(
         status_code=500,
-        content={"detail": "Please try again later."},
+        content={"detail": f"Please try again later. {exc}"},
     )
 
 

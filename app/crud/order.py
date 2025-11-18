@@ -6,7 +6,7 @@ from app.models.product import Product
 from app.models.cart_item import CartItem
 from app.models.address import Address
 from app.core.exceptions import OrderException
-from app.utils.order_utils import generate_order_number
+from app.utils.order_utils import generate_order_number, generate_trx_ref
 from app.crud.address import AddressCrud
 
 
@@ -59,6 +59,7 @@ class OrderCrud:
             order_number=generate_order_number(),
             total_amount=total_amount,
             status="pending",
+            tx_ref=generate_trx_ref(),
         )
         self.db.add(order)
         self.db.flush()  # Get order.id
