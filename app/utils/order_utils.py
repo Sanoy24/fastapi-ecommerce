@@ -11,7 +11,7 @@ from app.models.product import Product
 
 
 def generate_order_number() -> str:
-    return f"ORD-{datetime.date.today().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+    return f"ORD-{datetime.date.today().strftime('%Y%m%d,%H%M%S')}-{str(uuid.uuid4())[:10].upper()}"
 
 
 def generate_trx_ref() -> str:
