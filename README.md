@@ -1,4 +1,4 @@
-# E-Commerce Backend API
+# FastAPI E-Commerce RESTFul API
 
 A robust and scalable RESTful API built with FastAPI for managing an e-commerce platform. This backend handles product catalogs, user authentication, shopping carts, order processing, and more.
 
