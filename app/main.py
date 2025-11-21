@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -9,6 +10,15 @@ from app.core.logger import logger
 from pydantic import BaseModel
 
 from app.utils.seed import seed_product
+from app.core.redis import RedisManager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    redis_manager = RedisManager.get_instance()
+    await redis_manager.connect()
+    yield
+    await redis_manager.close()
 
 
 class RootResponse(BaseModel):
@@ -17,6 +27,7 @@ class RootResponse(BaseModel):
 
 app = FastAPI(
     # --- Metadata for Documentation (Title and Description are crucial) ---
+    lifespan=lifespan,
     title="E-Commerce Backend API",
     description="RESTful API for managing the product catalog, user authentication, shopping carts, and order processing for the online store.",
     version="1.0.0",
