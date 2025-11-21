@@ -3,6 +3,8 @@ from typing import Generator, Optional
 from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException, status
 from app.services.cart_service import CartService
+from app.services.payment_service import PaymentService
+from app.services.review_service import ReviewService
 from app.services.user_service import UserService
 from app.services.address_service import AddressService
 from app.services.category_service import CategoryService
@@ -61,6 +63,14 @@ def get_cart_service_dep(db: Annotated[Session, Depends(get_db)]) -> CartService
 
 def get_order_service_dep(db: Annotated[Session, Depends(get_db)]) -> OrderService:
     return OrderService(db=db)
+
+
+def get_review_service_dep(db: Annotated[Session, Depends(get_db)]) -> ReviewService:
+    return ReviewService(db=db)
+
+
+def get_payment_service_dep(db: Annotated[Session, Depends(get_db)]) -> PaymentService:
+    return PaymentService(db=db)
 
 
 async def get_current_user(
