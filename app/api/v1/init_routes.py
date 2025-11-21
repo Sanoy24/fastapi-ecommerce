@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api.v1.routes import cart, category, healthcheck, product, user, order
+from app.api.v1.routes import cart, category, healthcheck, product, user, order, review
 
 
 def init_routes(app: FastAPI):
@@ -10,3 +10,4 @@ def init_routes(app: FastAPI):
     app.include_router(router=product.router, prefix="/product")
     app.include_router(router=cart.router, prefix="/cart")
     app.include_router(router=order.router, prefix="/order")
+    app.include_router(router=review.router, prefix="/reviews")
