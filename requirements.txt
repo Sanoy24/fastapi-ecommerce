@@ -51,3 +51,5 @@ uvicorn==0.38.0
 watchfiles==1.1.1
 websockets==15.0.1
 win32_setctime==1.2.0
+
+stripe==11.1.1

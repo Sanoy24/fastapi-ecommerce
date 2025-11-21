@@ -14,7 +14,7 @@ class Payment(Base):
         ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
     )
     payment_method: Mapped[str] = mapped_column(
-        SQLEnum("credit_card", "paypal", "bank_transfer", name="payment_method"),
+        SQLEnum("credit_card", "paypal", "bank_transfer", "stripe", name="payment_method"),
         nullable=False,
     )
     amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)

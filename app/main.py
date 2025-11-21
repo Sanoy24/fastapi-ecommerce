@@ -47,6 +47,14 @@ app = FastAPI(
             "name": "orders",
             "description": "Order processing and history.",
         },
+        {
+            "name": "revewies",
+            "description": "write review and get user reviews",
+        },
+        {
+            "name": "payment",
+            "description": "process payment",
+        },
     ],
     # --- Servers for Multi-Environment Support ---
     # --- Path Configuration ---
