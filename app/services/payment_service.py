@@ -1,11 +1,11 @@
 import stripe
 from fastapi import HTTPException, status
-from app.core.config import setting
+from app.core.config import settings
 from app.crud.payment import PaymentCrud
 from app.crud.order import OrderCrud
 from app.models.order import Order
 
-stripe.api_key = setting.STRIPE_SECRET_KEY
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 class PaymentService:
