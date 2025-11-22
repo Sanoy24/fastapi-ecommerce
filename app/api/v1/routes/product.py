@@ -47,14 +47,6 @@ async def get_all_products(
     )
 
 
-@router.get("/{slug}", response_model=ProductResponse)
-async def get_product_by_slug(
-    slug: Annotated[str, Path(title="The slug of the item to get")],
-    product_service: product_dependency,
-) -> ProductResponse:
-    return product_service.get_product_by_slug(slug)
-
-
 @router.get("/category/{slug}", response_model=List[ProductResponse])
 async def get_products_by_category_slug(
     slug: Annotated[str, Path(title="The category slug")],
@@ -63,11 +55,19 @@ async def get_products_by_category_slug(
     return product_service.get_products_by_category_slug(slug)
 
 
-@router.get("/{id}", response_model=ProductResponse)
+@router.get("/id/{id}", response_model=ProductResponse)
 async def get_product_by_id(
     id: int, product_service: product_dependency, current_admin: admin_dependency
 ) -> ProductResponse:
     return product_service.get_product_by_id(id)
+
+
+@router.get("/{slug}", response_model=ProductResponse)
+async def get_product_by_slug(
+    slug: Annotated[str, Path(title="The slug of the item to get")],
+    product_service: product_dependency,
+) -> ProductResponse:
+    return product_service.get_product_by_slug(slug)
 
 
 @router.put("/{id}", response_model=ProductResponse)
