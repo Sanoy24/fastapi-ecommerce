@@ -16,6 +16,7 @@ from app.utils.security import decode_access_token, TokenError
 from app.models.user import User
 from app.schema.user_schema import UserPublic
 from app.core.logger import *
+from app.core.redis import RedisClient, redis_client
 
 oauth_scheme = HTTPBearer(
     scheme_name="Bearer",
@@ -33,6 +34,10 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+async def get_redis_manager() -> RedisClient:
+    return redis_client
 
 
 def get_user_service_dep(db: Session = Depends(get_db)) -> UserService:
@@ -53,8 +58,11 @@ def get_category_service_dep(db: Session = Depends(get_db)) -> CategoryService:
     return CategoryService(db=db)
 
 
-def get_product_service_dep(db: Annotated[Session, Depends(get_db)]) -> ProductService:
-    return ProductService(db=db)
+def get_product_service_dep(
+    db: Annotated[Session, Depends(get_db)],
+    redis_client: Annotated[RedisClient, Depends(get_redis_manager)],
+) -> ProductService:
+    return ProductService(db=db, redis=redis_client)
 
 
 def get_cart_service_dep(db: Annotated[Session, Depends(get_db)]) -> CartService:

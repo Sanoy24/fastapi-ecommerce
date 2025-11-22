@@ -57,7 +57,8 @@ class ProductCrud:
     def get_product_by_id(self, id: int) -> Product | None:
         """Retrieve a product by id; returns None if not found."""
         stmt = select(Product).where(Product.id == id)
-        return self.db.scalar(stmt)
+        result = self.db.scalar(stmt)
+        return result
 
     def get_all_products(
         self,

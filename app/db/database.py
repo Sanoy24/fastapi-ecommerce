@@ -2,10 +2,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy import text
 from sqlalchemy.orm import DeclarativeBase
-from app.core.config import setting
+from app.core.config import settings
 
 
-engine = create_engine(setting.Database_url, connect_args={"check_same_thread": False})
+engine = create_engine(settings.Database_url, connect_args={"check_same_thread": False})
 
 
 class Base(DeclarativeBase):
