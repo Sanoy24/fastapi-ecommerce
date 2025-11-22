@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -10,15 +11,14 @@ from app.core.logger import logger
 from pydantic import BaseModel
 
 from app.utils.seed import seed_product
-from app.core.redis import RedisManager
+from app.core.redis import redis_client
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    redis_manager = RedisManager.get_instance()
-    await redis_manager.connect()
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    await redis_client.connect()
     yield
-    await redis_manager.close()
+    await redis_client.close()
 
 
 class RootResponse(BaseModel):

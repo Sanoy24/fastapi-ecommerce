@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import ProductException
 from app.core.logger import logger
+from app.core.redis import RedisClient
 from app.crud.category import CategoryCrud
 from app.crud.product import ProductCrud
 from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
@@ -12,8 +13,9 @@ from app.schema.common_schema import PaginatedResponse
 
 
 class ProductService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, redis: RedisClient):
         self.db = db
+        self.redis_client = redis
         self.crud = ProductCrud(db=db)
 
     def create_product(self, create_dto: ProductCreate) -> ProductResponse:
@@ -43,14 +45,36 @@ class ProductService:
             )
         return ProductResponse.model_validate(product)
 
-    def get_product_by_id(self, id: int) -> ProductResponse:
-        """Retrieve a product by id; 404 if not found."""
-        product = self.crud.get_product_by_id(id)
-        if not product:
+    async def get_product_by_id(self, id: int) -> ProductResponse:
+        """Retrieve a product by id with caching."""
+        cache_key = f"product:{id}"
+
+        # Try cache first (store as JSON string for speed)
+        cached_json = await self.redis_client.get_json(cache_key)
+        if cached_json:
+            logger.info(
+                f"Cache hit for product: {id}",
+            )
+            return ProductResponse.model_validate_json(cached_json)
+
+        logger.info("Cache miss for product:%s", id)
+
+        # ← FIX: Must be await + async CRUD!
+        product_model = self.crud.get_product_by_id(id)
+
+        if not product_model:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
             )
-        return ProductResponse.model_validate(product)
+
+        response_data = ProductResponse.model_validate(product_model)
+
+        # Cache for 10 minutes (adjust as needed)
+        await self.redis_client.set_json(
+            cache_key, response_data.model_dump_json(), ex=600
+        )
+
+        return response_data
 
     def get_all_products(
         self,

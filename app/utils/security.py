@@ -3,7 +3,7 @@ from datetime import timedelta, datetime, timezone
 from typing import Dict, Optional, Any
 import jwt
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
-from app.core.config import setting
+from app.core.config import settings
 from app.schema.user_schema import TokenSchema
 
 # implement password hashing
@@ -46,7 +46,7 @@ def create_token(
     """
     now = datetime.now(timezone.utc)
     if expiration is None:
-        expiration = timedelta(minutes=setting.JWT_DEFAULT_EXP_MINUTES)
+        expiration = timedelta(minutes=settings.JWT_DEFAULT_EXP_MINUTES)
 
     expiration_time = now + expiration
     payload = {
@@ -61,7 +61,9 @@ def create_token(
     if audience:
         payload["aud"] = audience
 
-    token = jwt.encode(payload, setting.JWT_SECRET_KEY, algorithm=setting.JWT_ALGORITHM)
+    token = jwt.encode(
+        payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
     return token
 
 
@@ -82,8 +84,8 @@ def decode_access_token(token: str) -> Dict[str, Any]:
     try:
         payload = jwt.decode(
             token,
-            setting.JWT_SECRET_KEY,
-            algorithms=[setting.JWT_ALGORITHM],  # List for security
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],  # List for security
             options={"verify_signature": True, "verify_exp": True},
         )
         return payload

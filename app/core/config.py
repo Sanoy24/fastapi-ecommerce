@@ -15,4 +15,4 @@ class Setting(BaseSettings):
     )
 
 
-setting = Setting()
+settings = Setting()

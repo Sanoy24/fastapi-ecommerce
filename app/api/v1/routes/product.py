@@ -59,7 +59,7 @@ async def get_products_by_category_slug(
 async def get_product_by_id(
     id: int, product_service: product_dependency, current_admin: admin_dependency
 ) -> ProductResponse:
-    return product_service.get_product_by_id(id)
+    return await product_service.get_product_by_id(id)
 
 
 @router.get("/{slug}", response_model=ProductResponse)
