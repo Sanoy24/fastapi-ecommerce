@@ -1,0 +1,33 @@
+[project]
+name = "fastapi-ecommerce"
+version = "1.0.0"
+description = "A scalable and modular eCommerce REST API built with FastAPI, SQLAlchemy, and JWT authentication."
+authors = [
+    {name = "Yonas Mekonnen",email = "myonas886@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    "fastapi[standard] (>=0.121.3,<0.122.0)",
+    "sqlalchemy (>=2.0.44,<3.0.0)",
+    "pydantic (>=2.12.4,<3.0.0)",
+    "pydantic-settings (>=2.12.0,<3.0.0)",
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "alembic (>=1.17.2,<2.0.0)",
+    "passlib (>=1.7.4,<2.0.0)",
+    "python-multipart (>=0.0.20,<0.0.21)",
+    "stripe (>=14.0.1,<15.0.0)",
+    "loguru (>=0.7.3,<0.8.0)",
+    "slugify (>=0.0.1,<0.0.2)",
+    "pwdlib[argon2] (>=0.3.0,<0.4.0)",
+    "pyjwt (>=2.10.1,<3.0.0)",
+    "redis (>=7.1.0,<8.0.0)"
+]
+
+[tool.poetry]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
