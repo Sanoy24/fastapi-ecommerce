@@ -53,7 +53,7 @@ class PaymentService:
         event = None
         try:
             event = stripe.Webhook.construct_event(
-                payload, sig_header, setting.STRIPE_WEBHOOK_SECRET
+                payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail="Invalid payload")
