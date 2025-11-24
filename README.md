@@ -4,32 +4,32 @@ A robust and scalable RESTful API built with FastAPI for managing an e-commerce 
 
 ## Features
 
-- **User Management**: Secure user registration, login, and profile management using JWT authentication and Argon2 hashing.
-- **Product Catalog**: Manage products and categories with support for hierarchical structures.
-- **Shopping Cart**: Full-featured shopping cart functionality (add, remove, update items).
-- **Order Processing**: comprehensive order lifecycle management from creation to completion.
-- **Payments**: Integration ready for payment processing (Data models included).
-- **Reviews**: Product review and rating system.
-- **Address Management**: Manage user shipping and billing addresses.
-- **Database**: SQL-based persistence using SQLAlchemy ORM with Alembic for migrations.
-- **Monitoring**: Integrated Sentry for error tracking and performance monitoring.
-- **Documentation**: Interactive API documentation via Swagger UI and ReDoc.
+-   **User Management**: Secure user registration, login, and profile management using JWT authentication and Argon2 hashing.
+-   **Product Catalog**: Manage products and categories with support for hierarchical structures.
+-   **Shopping Cart**: Full-featured shopping cart functionality (add, remove, update items).
+-   **Order Processing**: comprehensive order lifecycle management from creation to completion.
+-   **Payments**: Integration ready for payment processing (Data models included).
+-   **Reviews**: Product review and rating system.
+-   **Address Management**: Manage user shipping and billing addresses.
+-   **Database**: SQL-based persistence using SQLAlchemy ORM with Alembic for migrations.
+-   **Monitoring**: Integrated Sentry for error tracking and performance monitoring.
+-   **Documentation**: Interactive API documentation via Swagger UI and ReDoc.
 
 ## Tech Stack
 
-- **Framework**: [FastAPI](https://fastapi.tiangolo.com/)
-- **Language**: Python 3.10+
-- **Database ORM**: [SQLAlchemy](https://www.sqlalchemy.org/)
-- **Migrations**: [Alembic](https://alembic.sqlalchemy.org/)
-- **Validation**: [Pydantic](https://docs.pydantic.dev/)
-- **Authentication**: PyJWT, Argon2-cffi
-- **Server**: Uvicorn
-- **Logging**: Loguru
+-   **Framework**: [FastAPI](https://fastapi.tiangolo.com/)
+-   **Language**: Python 3.10+
+-   **Database ORM**: [SQLAlchemy](https://www.sqlalchemy.org/)
+-   **Migrations**: [Alembic](https://alembic.sqlalchemy.org/)
+-   **Validation**: [Pydantic](https://docs.pydantic.dev/)
+-   **Authentication**: PyJWT, Argon2-cffi
+-   **Server**: Uvicorn
+-   **Logging**: Loguru
 
 ## Prerequisites
 
-- Python 3.10 or higher
-- Git
+-   Python 3.10 or higher
+-   Git
 
 ## 🔧 Installation
 
@@ -84,6 +84,26 @@ uvicorn app.main:app --reload
 
 The API will be available at `http://127.0.0.1:8000/api/v1`.
 
+## Using Poetry
+
+If you prefer using [Poetry](https://python-poetry.org/) for dependency management:
+
+1.  **Install dependencies**
+
+    ```bash
+    poetry install
+    ```
+
+2.  **Environment Configuration**
+
+    Ensure you have created the `.env` file as described in the [Installation](#installation) section.
+
+3.  **Run the application**
+
+    ```bash
+    poetry run uvicorn app.main:app --reload
+    ```
+
 ## Docker Support
 
 You can also run the application using Docker.
@@ -104,8 +124,8 @@ You can also run the application using Docker.
 
 Once the application is running, you can access the interactive documentation:
 
-- **Swagger UI**: [http://127.0.0.1:8000/api/v1/docs](http://127.0.0.1:8000/api/v1/docs)
-- **ReDoc**: [http://127.0.0.1:8000/api/v1/redoc](http://127.0.0.1:8000/api/v1/redoc)
+-   **Swagger UI**: [http://127.0.0.1:8000/api/v1/docs](http://127.0.0.1:8000/api/v1/docs)
+-   **ReDoc**: [http://127.0.0.1:8000/api/v1/redoc](http://127.0.0.1:8000/api/v1/redoc)
 
 ## Project Structure
 
