@@ -6,7 +6,9 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     func,
+    select,
 )
+from sqlalchemy.ext.hybrid import hybrid_property
 from typing import List, Optional
 import datetime
 
@@ -43,3 +45,49 @@ class Product(Base):
     reviews: Mapped[List["Review"]] = relationship(
         "Review", back_populates="product", cascade="all, delete-orphan"
     )
+
+    @hybrid_property
+    def average_rating(self) -> Optional[float]:
+        """Calculate average rating from reviews (instance level)."""
+        if not self.reviews:
+            return None
+        total = sum(review.rating for review in self.reviews)
+        return round(total / len(self.reviews), 2)
+
+    @average_rating.expression
+    def average_rating(cls):
+        """Calculate average rating for SQL queries (class level)."""
+        from app.models.review import Review
+        return (
+            select(func.avg(Review.rating))
+            .where(Review.product_id == cls.id)
+            .correlate_except(Review)
+            .scalar_subquery()
+        )
+
+    @hybrid_property
+    def review_count(self) -> int:
+        """Get total number of reviews (instance level)."""
+        return len(self.reviews) if self.reviews else 0
+
+    @review_count.expression
+    def review_count(cls):
+        """Get review count for SQL queries (class level)."""
+        from app.models.review import Review
+        return (
+            select(func.count(Review.id))
+            .where(Review.product_id == cls.id)
+            .correlate_except(Review)
+            .scalar_subquery()
+        )
+
+    @hybrid_property
+    def in_stock(self) -> bool:
+        """Check if product is in stock (instance level)."""
+        return self.stock_quantity > 0
+
+    @in_stock.expression
+    def in_stock(cls):
+        """Check stock availability for SQL queries (class level)."""
+        return cls.stock_quantity > 0
+
