@@ -1,6 +1,12 @@
 from fastapi import APIRouter, Depends, Path, Query, status
 from app.schema.common_schema import PaginatedResponse
 from app.schema.product_schema import ProductCreate, ProductUpdate, ProductResponse
+from app.schema.search_schema import (
+    AvailabilityFilter,
+    SortByField,
+    SortOrder,
+    ProductAutocompleteResponse,
+)
 from app.services.product_service import ProductService
 from app.dependencies import get_product_service_dep, require_admin
 from app.schema.user_schema import UserPublic
@@ -31,20 +37,68 @@ async def create_prodcut(
 async def get_all_products(
     product_service: product_dependency,
     page: Annotated[int, Query(ge=1)] = 1,
-    per_page: Annotated[
-        int,
-        Query(ge=1, le=100),
-    ] = 10,
-    search: str | None = Query(None),
-    category_id: int | None = Query(None),
-    min_price: float | None = Query(None),
-    max_price: float | None = Query(None),
-    sort_by: str = Query("id", enum=["id", "name", "price", "created_at"]),
-    sort_order: str = Query("asc", enum=["asc", "desc"]),
-) -> List[ProductResponse]:
+    per_page: Annotated[int, Query(ge=1, le=100)] = 10,
+    search: Annotated[str | None, Query(min_length=1, max_length=255)] = None,
+    category_id: Annotated[int | None, Query(ge=1)] = None,
+    min_price: Annotated[float | None, Query(ge=0)] = None,
+    max_price: Annotated[float | None, Query(ge=0)] = None,
+    min_rating: Annotated[float | None, Query(ge=0, le=5)] = None,
+    availability: AvailabilityFilter = AvailabilityFilter.ALL,
+    sort_by: SortByField = SortByField.ID,
+    sort_order: SortOrder = SortOrder.ASC,
+) -> PaginatedResponse[ProductResponse]:
+    """
+    Get all products with advanced filtering and sorting.
+    
+    **Filters:**
+    - `search`: Search in product name and description (case-insensitive)
+    - `category_id`: Filter by category
+    - `min_price`, `max_price`: Price range filter
+    - `min_rating`: Minimum average rating (0-5)
+    - `availability`: Stock availability (all, in_stock, out_of_stock)
+    
+    **Sorting:**
+    - `sort_by`: Field to sort by (id, name, price, rating, popularity, created_at)
+    - `sort_order`: Sort direction (asc, desc)
+    
+    **Pagination:**
+    - `page`: Page number (1-indexed)
+    - `per_page`: Items per page (1-100)
+    """
     return product_service.get_all_products(
-        page, per_page, search, category_id, min_price, max_price, sort_by, sort_order
+        page,
+        per_page,
+        search,
+        category_id,
+        min_price,
+        max_price,
+        min_rating,
+        availability.value,
+        sort_by.value,
+        sort_order.value,
     )
+
+
+@router.get("/autocomplete", response_model=ProductAutocompleteResponse)
+async def get_product_autocomplete(
+    product_service: product_dependency,
+    q: Annotated[str, Query(min_length=2, max_length=100, description="Search query")],
+) -> ProductAutocompleteResponse:
+    """
+    Get product name suggestions for autocomplete.
+    
+    **Requirements:**
+    - Query must be at least 2 characters
+    - Returns maximum 10 suggestions
+    - Results are cached for 1 hour
+    
+    **Matching:**
+    - Prioritizes products that start with the query
+    - Falls back to products containing the query
+    - Case-insensitive matching
+    """
+    suggestions = await product_service.get_autocomplete_suggestions(q)
+    return ProductAutocompleteResponse(suggestions=suggestions)
 
 
 @router.get("/category/{slug}", response_model=List[ProductResponse])
