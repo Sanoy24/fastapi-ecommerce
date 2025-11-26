@@ -45,6 +45,9 @@ class Product(Base):
     reviews: Mapped[List["Review"]] = relationship(
         "Review", back_populates="product", cascade="all, delete-orphan"
     )
+    wishlist_items: Mapped[List["Wishlist"]] = relationship(
+        "Wishlist", back_populates="product", cascade="all, delete-orphan"
+    )
 
     @hybrid_property
     def average_rating(self) -> Optional[float]:

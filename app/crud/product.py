@@ -1,5 +1,5 @@
 from pydantic import HttpUrl
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -7,10 +7,11 @@ from app.core.exceptions import ProductException
 from app.core.logger import logger
 from app.models.category import Category
 from app.models.product import Product
+from app.schema.admin_schema import BulkInventoryUpdateItem, BulkInventoryUpdateResponse
 from app.schema.common_schema import PaginatedResponse, PaginationLinks, PaginationMeta
 from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
 from app.utils.generate_slug import generate_sku, generate_slug
-from typing import Literal
+from typing import List, Literal
 
 allowed_sort_order = Literal["asc", "desc"]
 allowed_sort_by = Literal["id", "price", "name", "created_at", "rating", "popularity"]
@@ -75,7 +76,7 @@ class ProductCrud:
     ) -> PaginatedResponse[ProductResponse]:
         """
         List all products with advanced filtering and sorting.
-        
+
         Args:
             page: Page number (1-indexed)
             per_page: Items per page (1-100)
@@ -89,7 +90,9 @@ class ProductCrud:
             sort_order: Sort direction ('asc' or 'desc')
         """
         logger.info(f"page: {page} - per_page: {per_page}")
-        logger.info(f"filters - price: [{min_price}, {max_price}], rating: {min_rating}, availability: {availability}")
+        logger.info(
+            f"filters - price: [{min_price}, {max_price}], rating: {min_rating}, availability: {availability}"
+        )
 
         page = max(page, 1)
         per_page = max(min(per_page, 100), 1)
@@ -108,7 +111,7 @@ class ProductCrud:
         # Category filter
         if category_id:
             stmt = stmt.where(Product.category_id == category_id)
-        
+
         # Price range filters
         if min_price is not None:
             stmt = stmt.where(Product.price >= min_price)
@@ -128,7 +131,7 @@ class ProductCrud:
 
         # Sorting
         from app.models.order_item import OrderItem
-        
+
         allowed_sorting_fields = {
             "id": Product.id,
             "name": Product.name,
@@ -189,7 +192,7 @@ class ProductCrud:
             query_params.append(f"sort_by={sort_by}")
         if sort_order != "asc":
             query_params.append(f"sort_order={sort_order}")
-        
+
         query_string = "&".join(query_params)
         base_with_params = f"{base}?{query_string}&" if query_params else f"{base}?"
 
@@ -197,7 +200,11 @@ class ProductCrud:
             self=f"{base_with_params}page={page}&per_page={per_page}",
             first=f"{base_with_params}page=1&per_page={per_page}",
             last=f"{base_with_params}page={total_pages}&per_page={per_page}",
-            prev=f"{base_with_params}page={page - 1}&per_page={per_page}" if page > 1 else None,
+            prev=(
+                f"{base_with_params}page={page - 1}&per_page={per_page}"
+                if page > 1
+                else None
+            ),
             next=(
                 f"{base_with_params}page={page + 1}&per_page={per_page}"
                 if page < total_pages
@@ -268,20 +275,20 @@ class ProductCrud:
     def get_product_suggestions(self, query: str, limit: int = 10) -> list[str]:
         """
         Get product name suggestions for autocomplete.
-        
+
         Args:
             query: Search query (minimum 2 characters)
             limit: Maximum number of suggestions (default 10)
-            
+
         Returns:
             List of product names matching the query
         """
         if not query or len(query) < 2:
             return []
-        
+
         search_pattern = f"{query}%"  # Prefix matching
         contains_pattern = f"%{query}%"  # Contains matching
-        
+
         # Get products that start with the query (higher priority)
         stmt_prefix = (
             select(Product.name)
@@ -290,13 +297,13 @@ class ProductCrud:
             .distinct()
             .limit(limit)
         )
-        
+
         prefix_matches = self.db.scalars(stmt_prefix).all()
-        
+
         # If we have enough prefix matches, return them
         if len(prefix_matches) >= limit:
             return list(prefix_matches)[:limit]
-        
+
         # Otherwise, get additional matches that contain the query
         remaining = limit - len(prefix_matches)
         stmt_contains = (
@@ -307,9 +314,9 @@ class ProductCrud:
             .distinct()
             .limit(remaining)
         )
-        
+
         contains_matches = self.db.scalars(stmt_contains).all()
-        
+
         # Combine results: prefix matches first, then contains matches
         return list(prefix_matches) + list(contains_matches)
 
@@ -322,3 +329,73 @@ class ProductCrud:
         )
         self.db.execute(stmt).scalar_one_or_none()
 
+    def get_total_products(self):
+        total_products = self.db.query(func.count(Product.id)).scalar() or 0
+        return total_products
+
+    def total_active_products(self):
+        active_products = (
+            self.db.query(func.count(Product.id))
+            .filter(Product.is_active == True)
+            .scalar()
+            or 0
+        )
+        return active_products
+
+    def total_inactive_products(self):
+        inactive_products = (
+            self.db.query(func.count(Product.id))
+            .filter(Product.is_active == False)
+            .scalar()
+            or 0
+        )
+        return inactive_products
+
+    def out_of_stock_count(self):
+        out_stock_count = (
+            self.db.query(func.count(Product.id))
+            .filter(Product.stock_quantity == 0)
+            .scalar()
+            or 0
+        )
+        return out_stock_count
+
+    def low_stock_count(self):
+        low_stock_count = (
+            self.db.query(func.count(Product.id))
+            .filter(and_(Product.stock_quantity > 0, Product.stock_quantity < 10))
+            .scalar()
+            or 0
+        )
+        return low_stock_count
+
+    def get_slow_stock_products(self, threshold: int):
+        products = (
+            self.db.query(Product)
+            .filter(
+                and_(Product.stock_quantity > 0, Product.stock_quantity < threshold)
+            )
+            .order_by(Product.stock_quantity.asc())
+            .all()
+        )
+        return products
+
+    def bulk_update_inventory(self, updates: List[BulkInventoryUpdateItem]):
+        """Bulk update product inventory"""
+        updated_count = 0
+        failed_products = []
+
+        for update in updates:
+            product = (
+                self.db.query(Product).filter(Product.id == update.product_id).first()
+            )
+            if not product:
+                failed_products.append(update.product_id)
+                continue
+
+            product.stock_quantity = update.stock_quantity
+            updated_count += 1
+
+        self.db.commit()
+
+        return updated_count, failed_products
