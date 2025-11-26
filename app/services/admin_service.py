@@ -8,6 +8,10 @@ from app.models.user import User
 from app.models.order import Order
 from app.models.product import Product
 from app.models.review import Review
+from app.crud.order import OrderCrud
+from app.crud.user import UserCrud
+from app.crud.product import ProductCrud
+from app.crud.review import ReviewCrud
 from app.schema.admin_schema import (
     SalesAnalytics,
     UserAnalytics,
@@ -31,43 +35,24 @@ class AdminService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.order_crud = OrderCrud(db=db)
+        self.user_crud = UserCrud(db=db)
+        self.product_crud = ProductCrud(db=db)
+        self.review_crud = ReviewCrud(db=db)
 
     # Analytics Methods
     def get_sales_analytics(self) -> SalesAnalytics:
         """Calculate sales analytics including revenue and order statistics"""
         # Total orders and revenue
-        total_orders = self.db.query(func.count(Order.id)).scalar() or 0
-        total_revenue = self.db.query(func.sum(Order.total_amount)).scalar() or 0.0
+        total_orders = self.order_crud.get_total_orders()
+        total_revenue = self.order_crud.get_total_revenue()
 
         # Orders by status
-        pending_orders = (
-            self.db.query(func.count(Order.id))
-            .filter(Order.status == "pending")
-            .scalar()
-            or 0
-        )
-        paid_orders = (
-            self.db.query(func.count(Order.id)).filter(Order.status == "paid").scalar()
-            or 0
-        )
-        shipped_orders = (
-            self.db.query(func.count(Order.id))
-            .filter(Order.status == "shipped")
-            .scalar()
-            or 0
-        )
-        delivered_orders = (
-            self.db.query(func.count(Order.id))
-            .filter(Order.status == "delivered")
-            .scalar()
-            or 0
-        )
-        cancelled_orders = (
-            self.db.query(func.count(Order.id))
-            .filter(Order.status == "cancelled")
-            .scalar()
-            or 0
-        )
+        pending_orders = self.order_crud.get_pending_orders()
+        paid_orders = self.order_crud.get_paid_orders()
+        shipped_orders = self.order_crud.get_shipped_orders_count()
+        delivered_orders = self.order_crud.get_delivered_orders_count()
+        cancelled_orders = self.order_crud.get_cancelled_orders_count()
 
         # Average order value
         average_order_value = (
@@ -75,13 +60,7 @@ class AdminService:
         )
 
         # Revenue last 30 days
-        thirty_days_ago = datetime.now() - timedelta(days=30)
-        revenue_last_30_days = (
-            self.db.query(func.sum(Order.total_amount))
-            .filter(Order.order_date >= thirty_days_ago)
-            .scalar()
-            or 0.0
-        )
+        revenue_last_30_days = self.order_crud.revenue_last_thirty_days()
 
         return SalesAnalytics(
             total_revenue=float(total_revenue),
@@ -97,24 +76,11 @@ class AdminService:
 
     def get_user_analytics(self) -> UserAnalytics:
         """Calculate user analytics including total users and growth"""
-        total_users = self.db.query(func.count(User.id)).scalar() or 0
-        total_customers = (
-            self.db.query(func.count(User.id)).filter(User.role == "customer").scalar()
-            or 0
-        )
-        total_admins = (
-            self.db.query(func.count(User.id)).filter(User.role == "admin").scalar()
-            or 0
-        )
-
+        total_users = self.user_crud.get_total_users()
+        total_customers = self.user_crud.get_total_customers()
+        total_admins = self.user_crud.get_total_admins()
         # New users in last 30 days
-        thirty_days_ago = datetime.now() - timedelta(days=30)
-        new_users_last_30_days = (
-            self.db.query(func.count(User.id))
-            .filter(User.created_at >= thirty_days_ago)
-            .scalar()
-            or 0
-        )
+        new_users_last_30_days = self.user_crud.get_new_user_in_last_thirty_days()
 
         return UserAnalytics(
             total_users=total_users,
@@ -125,31 +91,11 @@ class AdminService:
 
     def get_product_analytics(self) -> ProductAnalytics:
         """Calculate product analytics including inventory status"""
-        total_products = self.db.query(func.count(Product.id)).scalar() or 0
-        active_products = (
-            self.db.query(func.count(Product.id))
-            .filter(Product.is_active == True)
-            .scalar()
-            or 0
-        )
-        inactive_products = (
-            self.db.query(func.count(Product.id))
-            .filter(Product.is_active == False)
-            .scalar()
-            or 0
-        )
-        out_of_stock_count = (
-            self.db.query(func.count(Product.id))
-            .filter(Product.stock_quantity == 0)
-            .scalar()
-            or 0
-        )
-        low_stock_count = (
-            self.db.query(func.count(Product.id))
-            .filter(and_(Product.stock_quantity > 0, Product.stock_quantity < 10))
-            .scalar()
-            or 0
-        )
+        total_products = self.product_crud.get_total_products()
+        active_products = self.product_crud.total_active_products()
+        inactive_products = self.product_crud.total_inactive_products()
+        out_of_stock_count = self.product_crud.out_of_stock_count()
+        low_stock_count = self.product_crud.low_stock_count()
 
         return ProductAnalytics(
             total_products=total_products,
@@ -161,20 +107,10 @@ class AdminService:
 
     def get_review_analytics(self) -> ReviewAnalytics:
         """Calculate review analytics including approval status"""
-        total_reviews = self.db.query(func.count(Review.id)).scalar() or 0
-        pending_reviews = (
-            self.db.query(func.count(Review.id))
-            .filter(Review.is_approved == False)
-            .scalar()
-            or 0
-        )
-        approved_reviews = (
-            self.db.query(func.count(Review.id))
-            .filter(Review.is_approved == True)
-            .scalar()
-            or 0
-        )
-        average_rating = self.db.query(func.avg(Review.rating)).scalar()
+        total_reviews = self.review_crud.total_reviews()
+        pending_reviews = self.review_crud.pending_reviews()
+        approved_reviews = self.review_crud.approved_reviews()
+        average_rating = self.review_crud.average_rating()
 
         return ReviewAnalytics(
             total_reviews=total_reviews,
@@ -201,43 +137,34 @@ class AdminService:
         role: Optional[str] = None,
     ) -> UserManagementResponse:
         """Get paginated list of all users with optional filters"""
-        query = self.db.query(User)
+        # query = self.db.query(User)
 
-        # Apply filters
-        if search:
-            search_filter = or_(
-                User.email.ilike(f"%{search}%"),
-                User.first_name.ilike(f"%{search}%"),
-                User.last_name.ilike(f"%{search}%"),
-            )
-            query = query.filter(search_filter)
+        # # Apply filters
+        # if search:
+        #     search_filter = or_(
+        #         User.email.ilike(f"%{search}%"),
+        #         User.first_name.ilike(f"%{search}%"),
+        #         User.last_name.ilike(f"%{search}%"),
+        #     )
+        #     query = query.filter(search_filter)
 
-        if role:
-            query = query.filter(User.role == role)
+        # if role:
+        #     query = query.filter(User.role == role)
 
-        # Get total count
-        total = query.count()
+        # # Get total count
+        # total = query.count()
 
-        # Apply pagination
-        offset = (page - 1) * page_size
-        users = query.offset(offset).limit(page_size).all()
+        # # Apply pagination
+        # offset = (page - 1) * page_size
+        # users = query.offset(offset).limit(page_size).all()
+        total, users = self.user_crud.get_all_users(page, page_size, search, role)
 
         # Build user list with additional stats
         user_items = []
         for user in users:
             # Calculate total orders and spent
-            total_orders = (
-                self.db.query(func.count(Order.id))
-                .filter(Order.user_id == user.id)
-                .scalar()
-                or 0
-            )
-            total_spent = (
-                self.db.query(func.sum(Order.total_amount))
-                .filter(Order.user_id == user.id)
-                .scalar()
-                or 0.0
-            )
+            total_orders = self.order_crud.total_order_by_user(user.id)
+            total_spent = self.order_crud.total_spent_by_user(user.id)
 
             user_items.append(
                 UserListItem(
@@ -264,15 +191,7 @@ class AdminService:
                 detail="Invalid role. Must be 'customer' or 'admin'",
             )
 
-        user = self.db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-            )
-
-        user.role = new_role
-        self.db.commit()
-        self.db.refresh(user)
+        user = self.user_crud.update_user_role(user_id, new_role)
         return user
 
     # Order Management Methods
@@ -284,27 +203,7 @@ class AdminService:
         user_id: Optional[int] = None,
     ) -> OrderManagementResponse:
         """Get paginated list of all orders with optional filters"""
-        query = self.db.query(Order).join(User, Order.user_id == User.id)
-
-        # Apply filters
-        if status:
-            query = query.filter(Order.status == status)
-        if user_id:
-            query = query.filter(Order.user_id == user_id)
-
-        # Get total count
-        total = query.count()
-
-        # Apply pagination and ordering (newest first)
-        offset = (page - 1) * page_size
-        orders = (
-            query.order_by(Order.order_date.desc())
-            .offset(offset)
-            .limit(page_size)
-            .all()
-        )
-
-        # Build order list with user email
+        total, orders = self.order_crud.get_all_orders(page, page_size, status)
         order_items = []
         for order in orders:
             order_items.append(
@@ -334,54 +233,20 @@ class AdminService:
                 detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}",
             )
 
-        order = self.db.query(Order).filter(Order.id == order_id).first()
-        if not order:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
-            )
-
-        order.status = new_status
-        self.db.commit()
-        self.db.refresh(order)
-        return order
+        return self.order_crud.update_order_status(order_id, new_status)
 
     def mark_order_shipped(
         self, order_id: int, shipped_at: Optional[datetime] = None
     ) -> Order:
         """Mark an order as shipped"""
-        order = self.db.query(Order).filter(Order.id == order_id).first()
-        if not order:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
-            )
-
-        order.status = "shipped"
-        order.shipped_at = shipped_at or datetime.now()
-        self.db.commit()
-        self.db.refresh(order)
-        return order
+        return self.order_crud.mark_order_shipped(order_id, shipped_at)
 
     # Review Moderation Methods
     def get_pending_reviews(
         self, page: int = 1, page_size: int = 20
     ) -> ReviewModerationResponse:
         """Get paginated list of pending reviews"""
-        query = (
-            self.db.query(Review)
-            .join(User, Review.user_id == User.id)
-            .join(Product, Review.product_id == Product.id)
-            .filter(Review.is_approved == False)
-        )
-
-        total = query.count()
-
-        offset = (page - 1) * page_size
-        reviews = (
-            query.order_by(Review.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
-            .all()
-        )
+        total, reviews = self.review_crud.get_pending_reviews(page, page_size)
 
         review_items = []
         for review in reviews:
@@ -407,21 +272,7 @@ class AdminService:
         self, page: int = 1, page_size: int = 20
     ) -> ReviewModerationResponse:
         """Get paginated list of all reviews"""
-        query = (
-            self.db.query(Review)
-            .join(User, Review.user_id == User.id)
-            .join(Product, Review.product_id == Product.id)
-        )
-
-        total = query.count()
-
-        offset = (page - 1) * page_size
-        reviews = (
-            query.order_by(Review.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
-            .all()
-        )
+        total, reviews = self.review_crud.get_all_reviews(page, page_size)
 
         review_items = []
         for review in reviews:
@@ -445,39 +296,16 @@ class AdminService:
 
     def approve_review(self, review_id: int) -> Review:
         """Approve a review"""
-        review = self.db.query(Review).filter(Review.id == review_id).first()
-        if not review:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Review not found"
-            )
-
-        review.is_approved = True
-        self.db.commit()
-        self.db.refresh(review)
-        return review
+        return self.review_crud.approve_review(review_id)
 
     def reject_review(self, review_id: int) -> None:
         """Reject/delete a review"""
-        review = self.db.query(Review).filter(Review.id == review_id).first()
-        if not review:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Review not found"
-            )
-
-        self.db.delete(review)
-        self.db.commit()
+        return self.review_crud.reject_review(review_id)
 
     # Inventory Management Methods
     def get_low_stock_products(self, threshold: int = 10) -> List[InventoryAlert]:
         """Get products with low stock"""
-        products = (
-            self.db.query(Product)
-            .filter(
-                and_(Product.stock_quantity > 0, Product.stock_quantity < threshold)
-            )
-            .order_by(Product.stock_quantity.asc())
-            .all()
-        )
+        products = self.product_crud.get_slow_stock_products(threshold)
 
         return [
             InventoryAlert(
@@ -494,21 +322,9 @@ class AdminService:
         self, updates: List[BulkInventoryUpdateItem]
     ) -> BulkInventoryUpdateResponse:
         """Bulk update product inventory"""
-        updated_count = 0
-        failed_products = []
-
-        for update in updates:
-            product = (
-                self.db.query(Product).filter(Product.id == update.product_id).first()
-            )
-            if not product:
-                failed_products.append(update.product_id)
-                continue
-
-            product.stock_quantity = update.stock_quantity
-            updated_count += 1
-
-        self.db.commit()
+        updated_count, failed_products = self.product_crud.bulk_update_inventory(
+            updates
+        )
 
         return BulkInventoryUpdateResponse(
             updated_count=updated_count, failed_products=failed_products
