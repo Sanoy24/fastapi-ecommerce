@@ -1,24 +1,28 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from app.api.v1.init_routes import init_routes
-from app.api.v1.routes import healthcheck, user, category, product, cart
-from sqlalchemy.exc import SQLAlchemyError
-from app.middleware.request_logger import LoggingMiddleware
-from app.core.logger import logger
 from pydantic import BaseModel
+from sqlalchemy.exc import SQLAlchemyError
 
-from app.utils.seed import seed_product
+from app.api.v1.init_routes import init_routes
+from app.api.v1.routes import cart, category, healthcheck, product, user
+from app.core.elastic_config import close_es_client, get_es_client
+from app.core.logger import logger
 from app.core.redis import redis_client
+from app.middleware.request_logger import LoggingMiddleware
+from app.utils.seed import seed_product
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await redis_client.connect()
+    await get_es_client()
     yield
     await redis_client.close()
+    close_es_client()
 
 
 class RootResponse(BaseModel):
@@ -128,4 +132,5 @@ def read_root():
 
 init_routes(app)
 
+# seed_product()
 # seed_product()
