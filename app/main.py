@@ -13,16 +13,19 @@ from app.core.elastic_config import close_es_client, get_es_client
 from app.core.logger import logger
 from app.core.redis import redis_client
 from app.middleware.request_logger import LoggingMiddleware
+from app.utils.es_utils import bulk_index_products, create_product_index
 from app.utils.seed import seed_product
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await redis_client.connect()
-    await get_es_client()
+    client = await get_es_client()
+    # await create_product_index(client)
+    # await bulk_index_products(client)
     yield
     await redis_client.close()
-    close_es_client()
+    await close_es_client()
 
 
 class RootResponse(BaseModel):
@@ -131,6 +134,7 @@ def read_root():
 
 
 init_routes(app)
+
 
 # seed_product()
 # seed_product()
