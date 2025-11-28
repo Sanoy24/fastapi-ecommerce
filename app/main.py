@@ -33,19 +33,17 @@ class RootResponse(BaseModel):
 
 
 app = FastAPI(
-    # --- Metadata for Documentation (Title and Description are crucial) ---
     lifespan=lifespan,
     title="E-Commerce Backend API",
     description="RESTful API for managing the product catalog, user authentication, shopping carts, and order processing for the online store.",
     version="1.0.0",
-    # --- Additional OpenAPI Metadata ---
     contact={
         "name": "Yonas Mekonnen",
         "email": "myonas886@gmail.com",
         "url": "https://yonas-mekonnen-portfolio.vercel.app/",
     },
     license_info={
-        "name": "MIT",  # Or your preferred license (e.g., Apache 2.0)
+        "name": "MIT",
         "url": "https://opensource.org/licenses/MIT",
     },
     openapi_tags=[
@@ -74,18 +72,10 @@ app = FastAPI(
             "description": "process payment",
         },
     ],
-    # --- Servers for Multi-Environment Support ---
-    # --- Path Configuration ---
-    # Sets the base path for all routes, essential if your API runs behind a proxy or gateway.
     root_path="/api/v1",
     servers=[],
-    # Sets the documentation path. Since root_path is set to /api/v1,
-    # setting docs_url to "/docs" will result in the final path /api/v1/docs.
     docs_url="/docs",
     redoc_url="/redoc",
-    # --- Optional: Custom OpenAPI Schema Overrides ---
-    # You can override the OpenAPI schema function if needed for custom logic
-    # openapi_url="/openapi.json",
 )
 
 app.add_middleware(LoggingMiddleware)

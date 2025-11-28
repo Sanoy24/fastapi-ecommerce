@@ -26,10 +26,14 @@ async def create_product_index(es: AsyncElasticsearch):
                 "category": {"type": "keyword"},
                 "price": {"type": "float"},
                 "in_stock": {"type": "boolean"},
-                "suggest": {"type": "completion"},
+                "suggest": {
+                    "type": "completion",
+                    "contexts": [{"name": "category", "type": "category"}],
+                },
             }
         }
     }
+
     if await es.indices.exists(index="products"):
         await es.indices.delete(index="products")
         print("Deleted old 'products' index")
@@ -40,9 +44,7 @@ async def create_product_index(es: AsyncElasticsearch):
 
 def get_all_products():
     with SessionLocal() as db:
-        stmt = select(Product).options(
-            selectinload(Product.category)  # <— eager load list
-        )
+        stmt = select(Product).options(selectinload(Product.category))
         return db.scalars(stmt).all()
 
 
@@ -67,6 +69,15 @@ async def bulk_index_products(es: AsyncElasticsearch):
                         float(p.price) if isinstance(p.price, Decimal) else p.price
                     ),
                     "in_stock": p.in_stock,
+                    "suggest": {
+                        "input": [p.name],
+                        "contexts": {
+                            "category": (
+                                [p.category.name] if p.category else ["General"]
+                            )
+                            + ["all"]
+                        },
+                    },
                 },
             }
         )

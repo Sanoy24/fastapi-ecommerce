@@ -21,7 +21,6 @@ async def get_es_client() -> AsyncElasticsearch:
             sniff_on_start=False,
         )
 
-        # Retry for ~15 seconds
         for attempt in range(6):
             try:
                 logger.info(f"Elasticsearch ping attempt {attempt+1}/6...")
@@ -32,9 +31,8 @@ async def get_es_client() -> AsyncElasticsearch:
             except Exception as e:
                 logger.warning(f" Elasticsearch ping failed: {e}")
 
-            await asyncio.sleep(3)  # YOU NEED THIS
+            await asyncio.sleep(3)
 
-        # Final check
         if not await es.ping():
             logger.error(" Elasticsearch connection failed after retries")
             await es.close()
