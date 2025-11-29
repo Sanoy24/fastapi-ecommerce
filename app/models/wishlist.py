@@ -6,6 +6,7 @@ from app.db.database import Base
 
 class Wishlist(Base):
     """Wishlist entity representing user's favorite/saved products."""
+
     __tablename__ = "wishlists"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -26,4 +27,6 @@ class Wishlist(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="wishlist_items")
-    product: Mapped["Product"] = relationship("Product", back_populates="wishlist_items")
+    product: Mapped["Product"] = relationship(
+        "Product", back_populates="wishlist_items"
+    )

@@ -15,6 +15,7 @@ import datetime
 
 class Product(Base):
     """Product entity representing items in the catalog."""
+
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -61,6 +62,7 @@ class Product(Base):
     def average_rating(cls):
         """Calculate average rating for SQL queries (class level)."""
         from app.models.review import Review
+
         return (
             select(func.avg(Review.rating))
             .where(Review.product_id == cls.id)
@@ -77,6 +79,7 @@ class Product(Base):
     def review_count(cls):
         """Get review count for SQL queries (class level)."""
         from app.models.review import Review
+
         return (
             select(func.count(Review.id))
             .where(Review.product_id == cls.id)
@@ -93,4 +96,3 @@ class Product(Base):
     def in_stock(cls):
         """Check stock availability for SQL queries (class level)."""
         return cls.stock_quantity > 0
-

@@ -6,6 +6,7 @@ from datetime import datetime
 # Analytics Schemas
 class SalesAnalytics(BaseModel):
     """Sales analytics for admin dashboard"""
+
     total_revenue: float = Field(..., description="Total revenue from all orders")
     total_orders: int = Field(..., description="Total number of orders")
     pending_orders: int = Field(..., description="Orders with pending status")
@@ -19,6 +20,7 @@ class SalesAnalytics(BaseModel):
 
 class UserAnalytics(BaseModel):
     """User analytics for admin dashboard"""
+
     total_users: int = Field(..., description="Total number of users")
     total_customers: int = Field(..., description="Number of customer users")
     total_admins: int = Field(..., description="Number of admin users")
@@ -27,6 +29,7 @@ class UserAnalytics(BaseModel):
 
 class ProductAnalytics(BaseModel):
     """Product analytics for admin dashboard"""
+
     total_products: int = Field(..., description="Total number of products")
     active_products: int = Field(..., description="Number of active products")
     inactive_products: int = Field(..., description="Number of inactive products")
@@ -36,14 +39,18 @@ class ProductAnalytics(BaseModel):
 
 class ReviewAnalytics(BaseModel):
     """Review analytics for admin dashboard"""
+
     total_reviews: int = Field(..., description="Total number of reviews")
     pending_reviews: int = Field(..., description="Reviews awaiting approval")
     approved_reviews: int = Field(..., description="Approved reviews")
-    average_rating: Optional[float] = Field(None, description="Average rating across all reviews")
+    average_rating: Optional[float] = Field(
+        None, description="Average rating across all reviews"
+    )
 
 
 class DashboardOverview(BaseModel):
     """Complete dashboard overview with all analytics"""
+
     sales: SalesAnalytics
     users: UserAnalytics
     products: ProductAnalytics
@@ -53,6 +60,7 @@ class DashboardOverview(BaseModel):
 # User Management Schemas
 class UserListItem(BaseModel):
     """User item for admin user list"""
+
     id: int
     email: str
     first_name: Optional[str]
@@ -68,6 +76,7 @@ class UserListItem(BaseModel):
 
 class UserManagementResponse(BaseModel):
     """Paginated user list response"""
+
     users: List[UserListItem]
     total: int
     page: int
@@ -76,12 +85,14 @@ class UserManagementResponse(BaseModel):
 
 class UpdateUserRoleRequest(BaseModel):
     """Request to update user role"""
+
     role: str = Field(..., description="New role: 'customer' or 'admin'")
 
 
 # Order Management Schemas
 class OrderListItem(BaseModel):
     """Order item for admin order list"""
+
     id: int
     order_number: str
     user_id: int
@@ -98,6 +109,7 @@ class OrderListItem(BaseModel):
 
 class OrderManagementResponse(BaseModel):
     """Paginated order list response"""
+
     orders: List[OrderListItem]
     total: int
     page: int
@@ -106,17 +118,25 @@ class OrderManagementResponse(BaseModel):
 
 class UpdateOrderStatusRequest(BaseModel):
     """Request to update order status"""
-    status: str = Field(..., description="New status: 'pending', 'paid', 'shipped', 'delivered', 'cancelled'")
+
+    status: str = Field(
+        ...,
+        description="New status: 'pending', 'paid', 'shipped', 'delivered', 'cancelled'",
+    )
 
 
 class MarkOrderShippedRequest(BaseModel):
     """Request to mark order as shipped"""
-    shipped_at: Optional[datetime] = Field(None, description="Shipping timestamp, defaults to now")
+
+    shipped_at: Optional[datetime] = Field(
+        None, description="Shipping timestamp, defaults to now"
+    )
 
 
 # Review Moderation Schemas
 class ReviewModerationItem(BaseModel):
     """Review item for moderation"""
+
     id: int
     user_id: int
     user_email: str
@@ -133,6 +153,7 @@ class ReviewModerationItem(BaseModel):
 
 class ReviewModerationResponse(BaseModel):
     """Paginated review list response"""
+
     reviews: List[ReviewModerationItem]
     total: int
     page: int
@@ -142,6 +163,7 @@ class ReviewModerationResponse(BaseModel):
 # Inventory Management Schemas
 class InventoryAlert(BaseModel):
     """Low stock product alert"""
+
     id: int
     name: str
     sku: Optional[str]
@@ -154,16 +176,23 @@ class InventoryAlert(BaseModel):
 
 class BulkInventoryUpdateItem(BaseModel):
     """Single item for bulk inventory update"""
+
     product_id: int
-    stock_quantity: int = Field(..., ge=0, description="New stock quantity (must be >= 0)")
+    stock_quantity: int = Field(
+        ..., ge=0, description="New stock quantity (must be >= 0)"
+    )
 
 
 class BulkInventoryUpdateRequest(BaseModel):
     """Request to bulk update inventory"""
+
     updates: List[BulkInventoryUpdateItem]
 
 
 class BulkInventoryUpdateResponse(BaseModel):
     """Response for bulk inventory update"""
+
     updated_count: int
-    failed_products: List[int] = Field(default_factory=list, description="Product IDs that failed to update")
+    failed_products: List[int] = Field(
+        default_factory=list, description="Product IDs that failed to update"
+    )

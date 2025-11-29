@@ -49,18 +49,18 @@ async def get_all_products(
 ) -> PaginatedResponse[ProductResponse]:
     """
     Get all products with advanced filtering and sorting.
-    
+
     **Filters:**
     - `search`: Search in product name and description (case-insensitive)
     - `category_id`: Filter by category
     - `min_price`, `max_price`: Price range filter
     - `min_rating`: Minimum average rating (0-5)
     - `availability`: Stock availability (all, in_stock, out_of_stock)
-    
+
     **Sorting:**
     - `sort_by`: Field to sort by (id, name, price, rating, popularity, created_at)
     - `sort_order`: Sort direction (asc, desc)
-    
+
     **Pagination:**
     - `page`: Page number (1-indexed)
     - `per_page`: Items per page (1-100)
@@ -86,12 +86,12 @@ async def get_product_autocomplete(
 ) -> ProductAutocompleteResponse:
     """
     Get product name suggestions for autocomplete.
-    
+
     **Requirements:**
     - Query must be at least 2 characters
     - Returns maximum 10 suggestions
     - Results are cached for 1 hour
-    
+
     **Matching:**
     - Prioritizes products that start with the query
     - Falls back to products containing the query
