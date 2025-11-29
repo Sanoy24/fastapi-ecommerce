@@ -8,13 +8,19 @@ class PaymentCrud:
     def __init__(self, db: Session):
         self.db = db
 
-    def create_payment(self, order_id: int, amount: float, transaction_id: str, payment_method: str = "stripe"):
+    def create_payment(
+        self,
+        order_id: int,
+        amount: float,
+        transaction_id: str,
+        payment_method: str = "stripe",
+    ):
         payment = Payment(
             order_id=order_id,
             amount=amount,
             transaction_id=transaction_id,
             payment_method=payment_method,
-            status="pending"
+            status="pending",
         )
         self.db.add(payment)
         self.db.commit()

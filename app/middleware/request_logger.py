@@ -163,7 +163,12 @@ class LoggingMiddleware:
         response_logged = {}
 
         async def send_wrapper(message: Message) -> None:
-            nonlocal response_status, response_headers_bytes, response_body_accum, response_body_size, response_logged
+            nonlocal \
+                response_status, \
+                response_headers_bytes, \
+                response_body_accum, \
+                response_body_size, \
+                response_logged
 
             if message["type"] == "http.response.start":
                 response_status = message.get("status")

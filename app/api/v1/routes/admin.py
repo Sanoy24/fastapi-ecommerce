@@ -115,7 +115,9 @@ async def list_all_users(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     search: Optional[str] = Query(None, description="Search by email or name"),
-    role: Optional[str] = Query(None, description="Filter by role: 'customer' or 'admin'"),
+    role: Optional[str] = Query(
+        None, description="Filter by role: 'customer' or 'admin'"
+    ),
 ):
     """List all users with pagination and filters"""
     return admin_service.get_all_users(
@@ -179,7 +181,11 @@ async def update_order_status(
     order = admin_service.update_order_status(
         order_id=order_id, new_status=status_update.status
     )
-    return {"message": "Order status updated successfully", "order_id": order.id, "new_status": order.status}
+    return {
+        "message": "Order status updated successfully",
+        "order_id": order.id,
+        "new_status": order.status,
+    }
 
 
 @router.patch(
