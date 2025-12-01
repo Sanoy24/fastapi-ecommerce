@@ -84,10 +84,26 @@ class ProductService:
         category_id: int | None = None,
         min_price: float | None = None,
         max_price: float | None = None,
+        min_rating: float | None = None,
+        availability: str | None = "all",
         sort_by: str | None = "id",
         sort_order: str | None = "asc",
     ) -> PaginatedResponse[ProductResponse]:
-        """List all products as response models."""
+        """
+        List all products with advanced filtering and sorting.
+
+        Args:
+            page: Page number
+            per_page: Items per page
+            search: Search term for name/description
+            category_id: Filter by category
+            min_price: Minimum price
+            max_price: Maximum price
+            min_rating: Minimum average rating (0-5)
+            availability: Stock filter ('all', 'in_stock', 'out_of_stock')
+            sort_by: Sort field
+            sort_order: Sort direction ('asc' or 'desc')
+        """
         try:
             products = self.crud.get_all_products(
                 page,
@@ -96,6 +112,8 @@ class ProductService:
                 category_id,
                 min_price,
                 max_price,
+                min_rating,
+                availability,
                 sort_by,
                 sort_order,
             )
@@ -151,3 +169,45 @@ class ProductService:
             )
         products = self.crud.get_products_by_category_id(category.id)
         return [ProductResponse.model_validate(p) for p in products]
+
+    async def get_autocomplete_suggestions(self, query: str) -> List[str]:
+        """
+        Get product name suggestions for autocomplete with Redis caching.
+
+        Args:
+            query: Search query (minimum 2 characters)
+
+        Returns:
+            List of product name suggestions (max 10)
+        """
+        if not query or len(query) < 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Query must be at least 2 characters",
+            )
+
+        # Normalize query for cache key
+        cache_key = f"autocomplete:{query.lower()}"
+
+        # Try cache first
+        cached_suggestions = await self.redis_client.get_json(cache_key)
+        if cached_suggestions:
+            logger.info(f"Cache hit for autocomplete: {query}")
+            import json
+
+            return json.loads(cached_suggestions)
+
+        logger.info(f"Cache miss for autocomplete: {query}")
+
+        # Get suggestions from database
+        suggestions = self.crud.get_product_suggestions(query, limit=10)
+
+        # Cache for 1 hour (3600 seconds)
+        if suggestions:
+            import json
+
+            await self.redis_client.set_json(
+                cache_key, json.dumps(suggestions), ex=3600
+            )
+
+        return suggestions

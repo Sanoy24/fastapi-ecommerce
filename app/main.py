@@ -1,24 +1,37 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from app.api.v1.init_routes import init_routes
-from app.api.v1.routes import healthcheck, user, category, product, cart
-from sqlalchemy.exc import SQLAlchemyError
-from app.middleware.request_logger import LoggingMiddleware
-from app.core.logger import logger
 from pydantic import BaseModel
+from sqlalchemy.exc import SQLAlchemyError
 
-from app.utils.seed import seed_product
+from app.api.v1.init_routes import init_routes
+from app.api.v1.routes import cart, category, healthcheck, product, user
+from app.core.elastic_config import close_es_client, get_es_client
+from app.core.logger import logger
 from app.core.redis import redis_client
+from app.middleware.request_logger import LoggingMiddleware
+from app.utils.es_utils import bulk_index_products, create_product_index
+from app.utils.seed import seed_product
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await redis_client.connect()
+    try:
+        client = await get_es_client()
+        logger.info("Elasticsearch client initialized successfully")
+    except Exception as e:
+        logger.warning(
+            f"Failed to initialize Elasticsearch client: {e}. App will continue without ES."
+        )
+    await create_product_index(client)
+    await bulk_index_products(client)
     yield
     await redis_client.close()
+    await close_es_client()
 
 
 class RootResponse(BaseModel):
@@ -26,19 +39,17 @@ class RootResponse(BaseModel):
 
 
 app = FastAPI(
-    # --- Metadata for Documentation (Title and Description are crucial) ---
     lifespan=lifespan,
     title="E-Commerce Backend API",
     description="RESTful API for managing the product catalog, user authentication, shopping carts, and order processing for the online store.",
     version="1.0.0",
-    # --- Additional OpenAPI Metadata ---
     contact={
         "name": "Yonas Mekonnen",
         "email": "myonas886@gmail.com",
         "url": "https://yonas-mekonnen-portfolio.vercel.app/",
     },
     license_info={
-        "name": "MIT",  # Or your preferred license (e.g., Apache 2.0)
+        "name": "MIT",
         "url": "https://opensource.org/licenses/MIT",
     },
     openapi_tags=[
@@ -67,18 +78,10 @@ app = FastAPI(
             "description": "process payment",
         },
     ],
-    # --- Servers for Multi-Environment Support ---
-    # --- Path Configuration ---
-    # Sets the base path for all routes, essential if your API runs behind a proxy or gateway.
     root_path="/api/v1",
     servers=[],
-    # Sets the documentation path. Since root_path is set to /api/v1,
-    # setting docs_url to "/docs" will result in the final path /api/v1/docs.
     docs_url="/docs",
     redoc_url="/redoc",
-    # --- Optional: Custom OpenAPI Schema Overrides ---
-    # You can override the OpenAPI schema function if needed for custom logic
-    # openapi_url="/openapi.json",
 )
 
 app.add_middleware(LoggingMiddleware)
@@ -128,4 +131,6 @@ def read_root():
 
 init_routes(app)
 
+
+# seed_product()
 # seed_product()

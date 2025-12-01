@@ -1,14 +1,13 @@
-from sqlalchemy import Integer, Text, ForeignKey, DateTime, Boolean, func
+from sqlalchemy import Integer, ForeignKey, DateTime, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Optional
 from datetime import datetime
 from app.db.database import Base
 
 
-class Review(Base):
-    """Product review entity with rating and optional comment."""
+class Wishlist(Base):
+    """Wishlist entity representing user's favorite/saved products."""
 
-    __tablename__ = "reviews"
+    __tablename__ = "wishlists"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
@@ -17,13 +16,17 @@ class Review(Base):
     product_id: Mapped[int] = mapped_column(
         ForeignKey("products.id", ondelete="CASCADE"), nullable=False
     )
-    rating: Mapped[int] = mapped_column(Integer)
-    comment: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.current_timestamp()
     )
-    is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Unique constraint to prevent duplicate entries
+    __table_args__ = (
+        UniqueConstraint("user_id", "product_id", name="uq_user_product_wishlist"),
+    )
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="reviews")
-    product: Mapped["Product"] = relationship("Product", back_populates="reviews")
+    user: Mapped["User"] = relationship("User", back_populates="wishlist_items")
+    product: Mapped["Product"] = relationship(
+        "Product", back_populates="wishlist_items"
+    )

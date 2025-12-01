@@ -1,0 +1,21 @@
+filebeat.inputs:
+    - type: filestream
+      id: fastapi-logs
+      enabled: true
+      paths:
+          - /app_logs/*.json
+      parsers:
+          - ndjson:
+                keys_under_root: true
+                target: ""
+                overwrite_keys: true
+
+output.elasticsearch:
+    hosts: ["http://elasticsearch:9200"]
+    index: "fastapi-logs-%{+yyyy.MM.dd}"
+
+setup.template.name: "fastapi-logs"
+setup.template.pattern: "fastapi-logs-*"
+setup.ilm.enabled: false
+
+logging.level: info

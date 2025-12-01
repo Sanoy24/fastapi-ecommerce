@@ -8,3 +8,4 @@ from .order import Order
 from .payment import Payment
 from .product import Product
 from .review import Review
+from .wishlist import Wishlist

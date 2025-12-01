@@ -108,7 +108,6 @@ class CartService:
         }
 
     def merge_carts(self, user_id: int, session_id: str):
-
         user_cart = self.cart_crud.get_cart_by_user_id(user_id=user_id)
         anon_cart = self.cart_crud.get_cart_by_session_id(session_id=session_id)
 

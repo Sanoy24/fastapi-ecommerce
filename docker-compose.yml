@@ -5,6 +5,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
+      elasticsearch:
+        condition: service_healthy
       redis:
         condition: service_healthy
 
@@ -31,9 +33,59 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ingest.geoip.downloader.enabled=false
+      - ES_JAVA_OPTS=-Xms756m -Xmx756m
+    ulimits:
+      memlock: -1
+      nofile: 65536
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=60s",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.0
+    container_name: kibana
+    depends_on:
+      - elasticsearch
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
 
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.0
+    container_name: filebeat
+    user: root
+    depends_on:
+      - elasticsearch
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./logs:/app_logs:ro
+    command: ["--strict.perms=false"]
+
+    environment:
+      - ELASTICSEARCH_HOST=http://elasticsearch:9200
 volumes:
   redis_data:
+  es-data:
 
 networks:
   default:

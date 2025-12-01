@@ -9,6 +9,7 @@ from app.core.logger import logger
 
 class CategoryService:
     """Business logic for categories including validation and error mapping."""
+
     def __init__(self, db: Session):
         self.db = db
         self.crud = CategoryCrud(db=db)
@@ -82,9 +83,7 @@ class CategoryService:
                 detail="please try again.",
             )
 
-    def delete_category(
-        self, id: int
-    ) -> None:
+    def delete_category(self, id: int) -> None:
         """Delete a category by id; 404 if missing."""
         is_deleted = self.crud.delete_category(id)
         if not is_deleted:

@@ -46,7 +46,6 @@ async def add_item(
     current_user: user_dep,
     cart_service: cart_dependency,
 ):
-
     if current_user:
         cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
     else:

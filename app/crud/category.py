@@ -11,6 +11,7 @@ from app.utils.generate_slug import generate_slug
 
 class CategoryCrud:
     """Data access layer for Category entities."""
+
     def __init__(self, db: Session):
         self.db = db
 
