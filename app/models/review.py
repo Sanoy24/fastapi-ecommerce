@@ -7,6 +7,7 @@ from app.db.database import Base
 
 class Review(Base):
     """Product review entity with rating and optional comment."""
+
     __tablename__ = "reviews"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -18,7 +19,9 @@ class Review(Base):
     )
     rating: Mapped[int] = mapped_column(Integer)
     comment: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.current_timestamp())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.current_timestamp()
+    )
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships

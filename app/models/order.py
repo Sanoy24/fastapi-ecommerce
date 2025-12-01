@@ -8,6 +8,7 @@ from app.db.database import Base
 
 class Order(Base):
     """Order entity representing a customer's purchase and fulfillment state."""
+
     __tablename__ = "orders"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -28,7 +29,9 @@ class Order(Base):
         ),
         default="pending",
     )
-    order_date: Mapped[datetime] = mapped_column(DateTime, default=func.current_timestamp())
+    order_date: Mapped[datetime] = mapped_column(
+        DateTime, default=func.current_timestamp()
+    )
     shipped_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     tx_ref: Mapped[str] = mapped_column(String(255), unique=True)
     payment_status: Mapped[str] = mapped_column(

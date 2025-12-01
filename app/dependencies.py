@@ -147,7 +147,6 @@ async def get_optional_user(
     user_service: Annotated[UserService, Depends(get_user_service_dep)],
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(oauth_scheme)],
 ) -> UserPublic:
-
     if not credentials:
         return None
 
