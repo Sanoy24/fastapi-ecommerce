@@ -1,7 +1,8 @@
-from loguru import logger
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+from loguru import logger
 
 # Logs directory inside app/
 log_dir = Path("logs")  # app/
@@ -32,12 +33,12 @@ logger.add(
 
 # File handler (all logs)
 logger.add(
-    log_dir / f"{datetime.now().strftime('%Y-%m-%d')}-info.log",
-    format=LOG_FORMAT,
+    log_dir / f"{datetime.now().strftime('%Y-%m-%d')}-info.json",
+    serialize=True,  # <--- IMPORTANT: turn logs into JSON
     level="INFO",
-    rotation="10 MB",  # new file every 10MB
-    retention="14 days",  # keep logs for 2 weeks
-    compression="zip",  # compress old logs
+    rotation="10 MB",
+    retention="14 days",
+    compression="zip",
     enqueue=True,
 )
 
@@ -53,4 +54,5 @@ logger.add(
 # )
 
 # Export the logger instance
+__all__ = ["logger"]
 __all__ = ["logger"]

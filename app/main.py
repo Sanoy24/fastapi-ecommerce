@@ -20,9 +20,15 @@ from app.utils.seed import seed_product
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await redis_client.connect()
-    client = await get_es_client()
-    # await create_product_index(client)
-    # await bulk_index_products(client)
+    try:
+        client = await get_es_client()
+        logger.info("Elasticsearch client initialized successfully")
+    except Exception as e:
+        logger.warning(
+            f"Failed to initialize Elasticsearch client: {e}. App will continue without ES."
+        )
+    await create_product_index(client)
+    await bulk_index_products(client)
     yield
     await redis_client.close()
     await close_es_client()
