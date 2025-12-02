@@ -11,6 +11,8 @@ from app.api.v1.init_routes import init_routes
 from app.api.v1.routes import cart, category, healthcheck, product, user
 from app.core.elastic_config import close_es_client, get_es_client
 from app.core.logger import logger
+
+# from app.core.otel_config import setup_otel
 from app.core.redis import redis_client
 from app.middleware.request_logger import LoggingMiddleware
 from app.utils.es_utils import bulk_index_products, create_product_index
@@ -19,6 +21,7 @@ from app.utils.seed import seed_product
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # setup_otel()
     await redis_client.connect()
     try:
         client = await get_es_client()
@@ -132,5 +135,6 @@ def read_root():
 init_routes(app)
 
 
+# seed_product()
 # seed_product()
 # seed_product()

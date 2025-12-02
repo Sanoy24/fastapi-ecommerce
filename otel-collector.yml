@@ -1,0 +1,28 @@
+receivers:
+    otlp:
+        protocols:
+            http:
+                endpoints: 0.0.0.0:4318
+
+processors:
+    batch:
+
+exporters:
+    elasticsearch:
+        endpoints: [http://elasticsearch:9200]
+        # No 'mode' here—unsupported
+        # Optional: Add if you need to skip TLS cert verification (but your setup is HTTP, so not needed)
+        # tls:
+        #   skip_verify: true
+
+service:
+    pipelines:
+        traces:
+            receivers: [otlp]
+            processors: [batch]
+            exporters: [elasticsearch]
+
+        logs:
+            receivers: [otlp]
+            processors: [batch]
+            exporters: [elasticsearch]

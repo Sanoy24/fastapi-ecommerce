@@ -24,7 +24,12 @@ dependencies = [
     "pyjwt (>=2.10.1,<3.0.0)",
     "redis (>=7.1.0,<8.0.0)",
     "elasticsearch (>=9.2.0,<10.0.0)",
-    "aiohttp (>=3.13.2,<4.0.0)"
+    "aiohttp (>=3.13.2,<4.0.0)",
+    "opentelemetry-sdk (>=1.38.0,<2.0.0)",
+    "opentelemetry-instrumentation-fastapi (>=0.59b0,<0.60)",
+    "opentelemetry-instrumentation-logging (>=0.59b0,<0.60)",
+    "opentelemetry-exporter-otlp (>=1.38.0,<2.0.0)",
+    "opentelemetry-instrumentation-sqlalchemy (>=0.59b0,<0.60)"
 ]
 
 [tool.poetry]
