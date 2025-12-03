@@ -17,8 +17,8 @@ click==8.1.8
 colorama==0.4.6
 distlib==0.4.0
 dnspython==2.7.0
-elastic-transport==9.2.0
-elasticsearch==9.2.0
+elastic-transport==8.11.0
+elasticsearch==8.11.0
 email-validator==2.3.0
 fastapi==0.121.3
 fastapi-cli==0.0.16
