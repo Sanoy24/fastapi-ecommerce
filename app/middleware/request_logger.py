@@ -12,7 +12,7 @@ MAX_BODY_LOG_BYTES = 1024 * 16  # 16 KB - cap how much of the body we log
 SENSITIVE_BODY_KEYS = {"password", "token", "access_token", "refresh_token"}
 
 # Paths to exclude from logging
-EXCLUDED_PATHS = {"/api/v1/openapi.json", "/docs", "/redoc"}
+EXCLUDED_PATHS = {"/api/v1/openapi.json", "/docs", "/redoc", "/metrics"}
 
 
 def _safe_json_loads(b: bytes) -> Any:

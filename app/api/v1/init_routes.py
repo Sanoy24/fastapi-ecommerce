@@ -1,15 +1,16 @@
 from fastapi import FastAPI
 
 from app.api.v1.routes import (
+    admin,
     cart,
     category,
+    elastic,
     healthcheck,
-    product,
-    user,
     order,
-    review,
     payment,
-    admin,
+    product,
+    review,
+    user,
     wishlist,
 )
 
@@ -25,3 +26,4 @@ def init_routes(app: FastAPI):
     app.include_router(router=payment.router, prefix="/payments")
     app.include_router(router=admin.router, prefix="/admin")
     app.include_router(router=wishlist.router, prefix="/wishlist")
+    app.include_router(router=elastic.router, prefix="/elastic")
