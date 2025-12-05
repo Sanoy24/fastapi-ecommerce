@@ -15,14 +15,9 @@ services:
     environment:
       - ENV=development
       - REDIS_URL=${REDIS_URL}
-      - OTEL_SERVICE_NAME=fastapi-app
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
-      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-      - OTEL_TRACES_EXPORTER=otlp
     env_file:
       - .env
     command: >
-      opentelemetry-instrument
       uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
     tty: true
@@ -77,26 +72,46 @@ services:
     ports:
       - "5601:5601"
 
-  filebeat:
-    image: docker.elastic.co/beats/filebeat:8.11.0
-    container_name: filebeat
-    user: root
-    depends_on:
-      - elasticsearch
-    volumes:
-      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - ./logs:/app_logs:ro
-    command: ["--strict.perms=false"]
-
-    environment:
-      - ELASTICSEARCH_HOST=http://elasticsearch:9200
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: loki
     ports:
-      - "4318:4318"
-    command: ["--config=/etc/otel-collector-config.yaml"]
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
     volumes:
-      - ./otel-collector.yml:/etc/otel-collector-config.yaml
+      - ./loki-config.yml:/etc/loki/local-config.yaml
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./tempo.yml:/etc/tempo.yaml
+    ports:
+      - "3200:3200"   # tempo
+      - "4317:4317"  # otlp grpc
+      - "4318:4318"  # otlp http
+
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
 
 volumes:
   redis_data:

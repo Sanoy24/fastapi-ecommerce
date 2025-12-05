@@ -12,6 +12,14 @@ from app.api.v1.routes import cart, category, healthcheck, product, user
 from app.core.elastic_config import close_es_client, get_es_client
 from app.core.logger import logger
 
+from prometheus_fastapi_instrumentator import Instrumentator
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
 # from app.core.otel_config import setup_otel
 from app.core.redis import redis_client
 from app.middleware.request_logger import LoggingMiddleware
@@ -88,6 +96,22 @@ app = FastAPI(
 )
 
 app.add_middleware(LoggingMiddleware)
+
+Instrumentator().instrument(app).expose(app)
+
+# Configure OpenTelemetry
+resource = Resource(attributes={
+    "service.name": "fastapi-app"
+})
+
+trace.set_tracer_provider(TracerProvider(resource=resource))
+tracer = trace.get_tracer(__name__)
+
+otlp_exporter = OTLPSpanExporter(endpoint="http://tempo:4317", insecure=True)
+span_processor = BatchSpanProcessor(otlp_exporter)
+trace.get_tracer_provider().add_span_processor(span_processor)
+
+FastAPIInstrumentor.instrument_app(app)
 
 
 @app.exception_handler(RequestValidationError)
