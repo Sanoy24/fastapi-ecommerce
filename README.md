@@ -1,8 +1,8 @@
-# FastAPI E-Commerce RESTFul API
+# FastAPI E-Commerce Full Stack Application
 
-A robust and scalable RESTful API built with FastAPI for managing an e-commerce platform. This backend handles product catalogs, user authentication, shopping carts, order processing, and more.
+A robust and scalable full-stack e-commerce platform built with FastAPI (backend) and Vue.js (frontend). This application handles product catalogs, user authentication, shopping carts, order processing, and more.
 
-## 🚀 Features
+## Features
 
 -   **User Management**: Secure user registration, login, and profile management using JWT authentication and Argon2 hashing.
 -   **Product Catalog**: Manage products and categories with support for hierarchical structures.
@@ -15,7 +15,9 @@ A robust and scalable RESTful API built with FastAPI for managing an e-commerce 
 -   **Monitoring**: Integrated Sentry for error tracking and performance monitoring.
 -   **Documentation**: Interactive API documentation via Swagger UI and ReDoc.
 
-## 🛠️ Tech Stack
+## Tech Stack
+
+### Backend
 
 -   **Framework**: [FastAPI](https://fastapi.tiangolo.com/)
 -   **Language**: Python 3.10+
@@ -26,12 +28,23 @@ A robust and scalable RESTful API built with FastAPI for managing an e-commerce 
 -   **Server**: Uvicorn
 -   **Logging**: Loguru
 
-## 📋 Prerequisites
+### Frontend
+
+-   **Framework**: [Vue 3](https://vuejs.org/)
+-   **Language**: TypeScript
+-   **Build Tool**: [Vite](https://vitejs.dev/)
+-   **Routing**: [Vue Router](https://router.vuejs.org/)
+-   **State Management**: [Pinia](https://pinia.vuejs.org/)
+-   **HTTP Client**: [Axios](https://axios-http.com/)
+-   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+-   **Production Server**: Nginx
+
+## Prerequisites
 
 -   Python 3.10 or higher
 -   Git
 
-## 🔧 Installation
+## Installation
 
 1.  **Clone the repository**
 
@@ -65,7 +78,7 @@ A robust and scalable RESTful API built with FastAPI for managing an e-commerce 
     # Add other necessary variables
     ```
 
-## 🗄️ Database Setup
+## Database Setup
 
 Initialize the database and apply migrations:
 
@@ -74,7 +87,7 @@ Initialize the database and apply migrations:
 alembic upgrade head
 ```
 
-## 🚀 Running the Application
+## Running the Application
 
 Start the development server using Uvicorn:
 
@@ -104,9 +117,63 @@ If you prefer using [Poetry](https://python-poetry.org/) for dependency manageme
     poetry run uvicorn app.main:app --reload
     ```
 
+## Frontend Setup
+
+The frontend is a modern Vue 3 application with TypeScript and Tailwind CSS.
+
+### Development Mode
+
+1.  **Navigate to frontend directory**
+
+    ```bash
+    cd frontend
+    ```
+
+2.  **Install dependencies**
+
+    ```bash
+    npm install
+    ```
+
+3.  **Run development server**
+
+    ```bash
+    npm run dev
+    ```
+
+    The frontend will be available at `http://localhost:5173`
+
+### Production Build
+
+```bash
+cd frontend
+npm run build
+```
+
 ## Docker Support
 
-You can also run the application using Docker.
+### Running with Docker Compose (Recommended)
+
+The easiest way to run the full stack application:
+
+```bash
+# Build and start all services (frontend, backend, database, monitoring)
+docker-compose up --build
+
+# Run in detached mode
+docker-compose up -d --build
+```
+
+**Services:**
+
+-   **Frontend**: http://localhost (port 80)
+-   **Backend API**: http://localhost:8000/api/v1
+-   **API Docs**: http://localhost:8000/api/v1/docs
+-   **Grafana**: http://localhost:3000
+-   **Prometheus**: http://localhost:9090
+-   **Kibana**: http://localhost:5601
+
+### Running Backend Only
 
 1.  **Build the image**
 
@@ -120,14 +187,14 @@ You can also run the application using Docker.
     docker run -d -p 8000:8000 fastapi-ecommerce
     ```
 
-## 📚 API Documentation
+## API Documentation
 
 Once the application is running, you can access the interactive documentation:
 
 -   **Swagger UI**: [http://127.0.0.1:8000/api/v1/docs](http://127.0.0.1:8000/api/v1/docs)
 -   **ReDoc**: [http://127.0.0.1:8000/api/v1/redoc](http://127.0.0.1:8000/api/v1/redoc)
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 fastapi-ecommerce/
@@ -143,17 +210,27 @@ fastapi-ecommerce/
 │   ├── services/         # Business logic
 │   ├── utils/            # Utility functions
 │   └── main.py           # Application entry point
+├── frontend/             # Vue.js frontend application
+│   ├── src/
+│   │   ├── views/        # Vue components (pages)
+│   │   ├── router/       # Vue Router configuration
+│   │   ├── App.vue       # Root component
+│   │   └── main.ts       # Frontend entry point
+│   ├── Dockerfile        # Frontend Docker configuration
+│   ├── nginx.conf        # Nginx configuration
+│   ├── package.json      # Node.js dependencies
+│   └── vite.config.ts    # Vite configuration
 ├── tests/                # Test suite
 ├── .env                  # Environment variables
 ├── .gitignore
 ├── alembic.ini           # Alembic configuration
-├── docker-compose.yml    # Docker composition (if applicable)
-├── Dockerfile
+├── docker-compose.yml    # Docker composition
+├── Dockerfile            # Backend Docker configuration
 ├── requirements.txt      # Python dependencies
 └── README.md
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -163,10 +240,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4.  Push to the branch (`git push origin feature/AmazingFeature`)
 5.  Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📞 Contact
+## Contact
 
 Yonas Mekonnen - [Portfolio](https://yonas-mekonnen-portfolio.vercel.app/) - myonas886@gmail.com
