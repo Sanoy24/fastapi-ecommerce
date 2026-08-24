@@ -37,3 +37,22 @@ def get_single_order(
     current_user: user_dependency, order_service: order_dependency, order_id: int
 ):
     return order_service.get_one_order(current_user.id, order_id)
+
+
+@router.post(
+    "/{order_id}/cancel",
+    response_model=OrderResponse,
+    summary="Cancel order",
+    description=(
+        "Cancel a pending order. Stock is restored for all items. "
+        "Only orders in 'pending' status can be cancelled."
+    ),
+)
+def cancel_order(
+    order_id: int,
+    current_user: user_dependency,
+    order_service: order_dependency,
+):
+    """Cancel a pending order and restore product stock."""
+    return order_service.cancel_order(user_id=current_user.id, order_id=order_id)
+
