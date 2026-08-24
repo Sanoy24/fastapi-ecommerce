@@ -3,12 +3,13 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.v1.init_routes import init_routes
-from app.api.v1.routes import cart, category, healthcheck, product, user
+from app.core.config import settings
 from app.core.elastic_config import close_es_client, get_es_client
 from app.core.logger import logger
 
@@ -20,17 +21,15 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-# from app.core.otel_config import setup_otel
 from app.core.redis import redis_client
 from app.middleware.request_logger import LoggingMiddleware
 from app.utils.es_utils import bulk_index_products, create_product_index
-from app.utils.seed import seed_product
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # setup_otel()
     await redis_client.connect()
+    client = None
     try:
         client = await get_es_client()
         logger.info("Elasticsearch client initialized successfully")
@@ -38,8 +37,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.warning(
             f"Failed to initialize Elasticsearch client: {e}. App will continue without ES."
         )
-    await create_product_index(client)
-    await bulk_index_products(client)
+    if client is not None:
+        await create_product_index(client)
+        await bulk_index_products(client)
     yield
     await redis_client.close()
     await close_es_client()
@@ -81,18 +81,27 @@ app = FastAPI(
             "description": "Order processing and history.",
         },
         {
-            "name": "revewies",
-            "description": "write review and get user reviews",
+            "name": "reviews",
+            "description": "Write and retrieve product reviews.",
         },
         {
             "name": "payment",
-            "description": "process payment",
+            "description": "Stripe payment intent creation and webhook processing.",
         },
     ],
     root_path="/api/v1",
     servers=[],
     docs_url="/docs",
     redoc_url="/redoc",
+)
+
+# CORS — must be added before other middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.add_middleware(LoggingMiddleware)
@@ -159,6 +168,4 @@ def read_root():
 init_routes(app)
 
 
-# seed_product()
-# seed_product()
-# seed_product()
+

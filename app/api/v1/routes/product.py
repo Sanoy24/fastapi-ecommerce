@@ -20,7 +20,7 @@ admin_dependency = Annotated[UserPublic, Depends(require_admin)]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ProductResponse)
-async def create_prodcut(
+async def create_product(
     create_dto: ProductCreate,
     product_service: product_dependency,
     current_admin: admin_dependency,

@@ -162,4 +162,3 @@ async def get_optional_user(
 
     except Exception:
         return None
-        return None
