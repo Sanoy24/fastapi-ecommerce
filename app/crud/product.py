@@ -322,12 +322,18 @@ class ProductCrud:
 
     def deduct_stock(self, product_id: int, item_quantity: int):
         stmt = (
-            update(Product)
+            select(Product)
             .where(Product.id == product_id)
-            .values(stock_quantity=Product.stock_quantity - item_quantity)
-            .returning(Product.id)
+            .with_for_update()
         )
-        self.db.execute(stmt).scalar_one_or_none()
+        product = self.db.execute(stmt).scalar_one_or_none()
+        if not product:
+            raise ProductException(f"Product {product_id} not found")
+        if product.stock_quantity < item_quantity:
+            raise ProductException(f"Insufficient stock for product {product_id}")
+            
+        product.stock_quantity -= item_quantity
+        self.db.add(product)
 
     def get_total_products(self):
         total_products = self.db.query(func.count(Product.id)).scalar() or 0

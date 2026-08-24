@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -16,6 +16,19 @@ class SalesAnalytics(BaseModel):
     cancelled_orders: int = Field(..., description="Orders with cancelled status")
     average_order_value: float = Field(..., description="Average order value")
     revenue_last_30_days: float = Field(..., description="Revenue from last 30 days")
+
+
+class SalesOverTime(BaseModel):
+    date: str = Field(..., description="Date (YYYY-MM-DD)")
+    revenue: float = Field(...)
+    orders_count: int = Field(...)
+
+
+class TopSellingProduct(BaseModel):
+    product_id: int
+    product_name: str
+    total_quantity_sold: int
+    total_revenue: float
 
 
 class UserAnalytics(BaseModel):
@@ -92,7 +105,6 @@ class UpdateUserRoleRequest(BaseModel):
 # Order Management Schemas
 class OrderListItem(BaseModel):
     """Order item for admin order list"""
-
     id: int
     order_number: str
     user_id: int
@@ -103,8 +115,16 @@ class OrderListItem(BaseModel):
     order_date: datetime
     shipped_at: Optional[datetime]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OrderUpdateStatus(BaseModel):
+    status: str = Field(..., description="Order status: pending, paid, processing, shipped, delivered, cancelled")
+
+
+class OrderUpdateShipping(BaseModel):
+    tracking_number: str = Field(...)
+    shipping_carrier: str = Field(...)
 
 
 class OrderManagementResponse(BaseModel):

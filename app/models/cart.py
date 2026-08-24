@@ -1,6 +1,6 @@
 from sqlalchemy import Integer, ForeignKey, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from app.db.database import Base
 
@@ -14,6 +14,9 @@ class Cart(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    coupon_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True
+    )
     session_id: Mapped[str] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.current_timestamp()
@@ -24,6 +27,7 @@ class Cart(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="carts")
+    coupon: Mapped[Optional["Coupon"]] = relationship("Coupon", back_populates="carts")
     cart_items: Mapped[List["CartItem"]] = relationship(
         "CartItem", back_populates="cart", cascade="all, delete-orphan"
     )

@@ -1,7 +1,7 @@
 from sqlalchemy import Integer, ForeignKey, Numeric, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Enum as SQLEnum
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from app.db.database import Base
 
@@ -21,18 +21,23 @@ class Order(Base):
     billing_address_id: Mapped[int] = mapped_column(
         ForeignKey("addresses.id", ondelete="RESTRICT"), nullable=False
     )
+    coupon_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True
+    )
     order_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     status: Mapped[str] = mapped_column(
         SQLEnum(
-            "pending", "paid", "shipped", "delivered", "cancelled", name="order_status"
+            "pending", "paid", "processing", "shipped", "delivered", "cancelled", name="order_status"
         ),
         default="pending",
     )
     order_date: Mapped[datetime] = mapped_column(
         DateTime, default=func.current_timestamp()
     )
-    shipped_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    shipped_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    tracking_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    shipping_carrier: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     tx_ref: Mapped[str] = mapped_column(String(255), unique=True)
     payment_status: Mapped[str] = mapped_column(
         SQLEnum("pending", "success", "failed", name="payment_status"),
@@ -41,6 +46,7 @@ class Order(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="orders")
+    coupon: Mapped[Optional["Coupon"]] = relationship("Coupon", back_populates="orders")
     shipping_address: Mapped["Address"] = relationship(
         "Address", foreign_keys=[shipping_address_id]
     )

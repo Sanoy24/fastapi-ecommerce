@@ -26,10 +26,12 @@ class OrderResponse(BaseModel):
     order_number: str
     total_amount: float
     status: str
-    payment_status: str
-    tx_ref: str
     order_date: datetime
     shipped_at: Optional[datetime] = None
+    tracking_number: Optional[str] = None
+    shipping_carrier: Optional[str] = None
+    tx_ref: str
+    payment_status: str
     order_items: List[OrderItemResponse]
 
     model_config = {"from_attributes": True}
@@ -38,4 +40,3 @@ class OrderResponse(BaseModel):
 class OrderCreateRequest(BaseModel):
     shipping_address_id: int
     billing_address_id: int
-
