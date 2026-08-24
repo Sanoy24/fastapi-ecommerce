@@ -24,24 +24,20 @@ def test_create_payment_intent(client: TestClient, db_session: Session):
     # 1. Register User
     register_payload = {
         "email": "payment_user@example.com",
-        "password": "password123",
+        "password": "Password1",
         "first_name": "Payment",
         "last_name": "User",
-        "address": "123 Pay St",
-        "city": "Pay City",
-        "country": "Pay Country",
-        "zip_code": "12345",
-        "phone": "1234567890"
+        "phone": "1234567890",
     }
     client.post("/users/register", json=register_payload)
 
     # 2. Login
     login_payload = {
         "email": "payment_user@example.com",
-        "password": "password123"
+        "password": "Password1",
     }
     login_res = client.post("/users/login", json=login_payload)
-    token = login_res.json()["token"]
+    token = login_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
     # 3. Setup Order

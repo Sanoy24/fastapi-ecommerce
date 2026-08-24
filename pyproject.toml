@@ -29,7 +29,9 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi (>=0.59b0,<0.60)",
     "opentelemetry-instrumentation-logging (>=0.59b0,<0.60)",
     "opentelemetry-exporter-otlp (>=1.38.0,<2.0.0)",
-    "opentelemetry-instrumentation-sqlalchemy (>=0.59b0,<0.60)"
+    "opentelemetry-instrumentation-sqlalchemy (>=0.59b0,<0.60)",
+    "python-logging-loki (>=0.3.1,<0.4.0)",
+    "prometheus-fastapi-instrumentator (==7.0.0)"
 ]
 
 [tool.poetry]
@@ -41,5 +43,8 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 dev = [
-    "ruff (>=0.14.7,<0.15.0)"
+    "ruff (>=0.14.7,<0.15.0)",
+    "pytest (>=9.1.1,<10.0.0)",
+    "pytest-asyncio (>=1.4.0,<2.0.0)",
+    "httpx (>=0.28.1,<0.29.0)"
 ]

@@ -38,7 +38,7 @@ class CartService:
     def add_item(self, cart: Cart, data: CartItemCreate):
         product = self.prod_crud.get_product_by_id(data.product_id)
         if not product:
-            raise ProductException("product not found")
+            raise HTTPException(status_code=404, detail="product not found")
         if product.stock_quantity < data.quantity:
             raise ProductException("Product out of stock")
 
@@ -64,7 +64,7 @@ class CartService:
         item = self.cart_crud.update_item(cart_id=cart.id, item_id=item_id, data=data)
         if not item:
             raise HTTPException(
-                status=status.HTTP_404_NOT_FOUND, detail="Item not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Item not found"
             )
         return item
 
@@ -73,7 +73,7 @@ class CartService:
 
         if not item:
             raise HTTPException(
-                status=status.HTTP_404_NOT_FOUND, detail="Item not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Item not found"
             )
         return item
 

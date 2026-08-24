@@ -48,11 +48,14 @@ async def get_elastic_manager() -> AsyncElasticsearch:
     return await get_es_client()
 
 
-def get_user_service_dep(db: Session = Depends(get_db)) -> UserService:
+def get_user_service_dep(
+    db: Session = Depends(get_db),
+    redis: RedisClient = Depends(get_redis_manager),
+) -> UserService:
     """
     User service dependency
     """
-    return UserService(db=db)
+    return UserService(db=db, redis=redis)
 
 
 def get_elastic_service_dep(
@@ -161,5 +164,4 @@ async def get_optional_user(
         return UserPublic.model_validate(user)
 
     except Exception:
-        return None
         return None

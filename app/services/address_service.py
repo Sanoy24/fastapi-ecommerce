@@ -22,7 +22,7 @@ class AddressService:
     ) -> AddressPublic:
         address = self.crud.get_single_address(address_id)
         if not address:
-            raise HTTPException(status_code=s, detail="Address not found")
+            raise HTTPException(status_code=404, detail="Address not found")
         update_address_data = address_data.model_dump(exclude_unset=True)
         try:
             if update_address_data.get("is_default"):

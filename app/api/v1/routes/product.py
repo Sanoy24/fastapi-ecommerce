@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Path, Query, status
+from fastapi import APIRouter, Depends, File, Path, Query, UploadFile, status
 from app.schema.common_schema import PaginatedResponse
 from app.schema.product_schema import ProductCreate, ProductUpdate, ProductResponse
 from app.schema.search_schema import (
@@ -10,9 +10,9 @@ from app.schema.search_schema import (
 from app.services.product_service import ProductService
 from app.dependencies import get_product_service_dep, require_admin
 from app.schema.user_schema import UserPublic
+from app.utils.upload import save_product_image
 from typing import Annotated, List
 from app.core.logger import logger
-import enum
 
 router = APIRouter(tags=["Product"])
 product_dependency = Annotated[ProductService, Depends(get_product_service_dep)]
@@ -20,7 +20,7 @@ admin_dependency = Annotated[UserPublic, Depends(require_admin)]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ProductResponse)
-async def create_prodcut(
+async def create_product(
     create_dto: ProductCreate,
     product_service: product_dependency,
     current_admin: admin_dependency,
@@ -140,3 +140,25 @@ async def delete_product(
 ):
     product_service.delete_product(id)
     return {"detail": "product deleted successfully"}
+
+
+@router.post(
+    "/{id}/image",
+    response_model=ProductResponse,
+    summary="Upload product image",
+    description=(
+        "Upload an image for a product. "
+        "Accepted formats: JPEG, PNG, WebP, GIF (max 5 MB). "
+        "Admin only."
+    ),
+)
+async def upload_product_image(
+    id: int,
+    product_service: product_dependency,
+    current_admin: admin_dependency,
+    file: UploadFile = File(..., description="Product image file"),
+) -> ProductResponse:
+    """Upload and attach an image to an existing product."""
+    image_url = await save_product_image(file)
+    return product_service.update_product(id, update_dto=ProductUpdate(image_url=image_url))
+

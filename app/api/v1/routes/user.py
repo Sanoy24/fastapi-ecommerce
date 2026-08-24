@@ -1,10 +1,13 @@
 from app.schema.address_schema import AddressCreate, AddressUpdate, AddressPublic
 from app.services.address_service import AddressService
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from app.services.user_service import UserService
 from app.schema.user_schema import (
+    ChangePasswordSchema,
     CreateUserSchema,
+    ForgotPasswordSchema,
     LoginSchema,
+    ResetPasswordSchema,
     TokenSchema,
     UserPublic,
     UpdateUserSchema,
@@ -25,13 +28,18 @@ address_dependency = Annotated[
 ]  # Note: Fixed typo from 'depedency' to 'dependency'
 
 
+from app.core.limiter import limiter
+from fastapi import Request
+
 @router.post(
     "/register",
     response_model=UserPublic,
     summary="Register user",
     description="Create a new user account.",
 )
+@limiter.limit("5/minute")
 async def create_user(
+    request: Request,
     create_user_data: CreateUserSchema,
     user_service: user_dependency,
 ) -> UserPublic:
@@ -58,11 +66,14 @@ async def create_user(
 @router.post(
     "/login",
     response_model=TokenSchema,
-    summary="Login",
-    description="Authenticate a user and return a JWT token.",
+    summary="User login",
+    description="Authenticate user and return a JWT token.",
 )
+@limiter.limit("10/minute")
 async def login(
-    user_login_data: LoginSchema, user_service: user_dependency
+    request: Request,
+    login_data: LoginSchema,
+    user_service: user_dependency,
 ) -> TokenSchema:
     """
     Authenticate a user and return an access token.
@@ -71,7 +82,7 @@ async def login(
     in subsequent requests.
 
     Parameters:
-    - user_login_data (LoginSchema): The login credentials, typically including email/username and password.
+    - login_data (LoginSchema): The login credentials, typically including email/username and password.
     - user_service (UserService): Dependency-injected service for user operations.
 
     Returns:
@@ -80,7 +91,7 @@ async def login(
     Raises:
     - HTTPException: If credentials are invalid (e.g., 401 Unauthorized).
     """
-    return user_service.login(user_login_data=user_login_data)
+    return user_service.login(user_login_data=login_data)
 
 
 @router.get(
@@ -246,3 +257,81 @@ async def update_address(
 
     address = address_service.update_address(address_id, address_data)
     return address
+
+
+# ─── Auth — refresh, logout, password management ───────────────────────────
+
+
+@router.post(
+    "/refresh",
+    response_model=TokenSchema,
+    summary="Refresh access token",
+    description="Exchange a valid refresh token for a new access + refresh token pair.",
+)
+async def refresh_token(
+    refresh_token: Annotated[str, Body(embed=True)],
+    user_service: user_dependency,
+) -> TokenSchema:
+    """Issue a new access token using a valid refresh token."""
+    return await user_service.refresh_access_token(refresh_token)
+
+
+@router.post(
+    "/logout",
+    status_code=204,
+    summary="Logout",
+    description="Revoke the current refresh token, effectively logging the user out.",
+)
+async def logout(
+    refresh_token: Annotated[str, Body(embed=True)],
+    user_service: user_dependency,
+) -> None:
+    """Revoke the refresh token so it can no longer be used."""
+    await user_service.logout(refresh_token)
+
+
+@router.put(
+    "/me/password",
+    status_code=204,
+    summary="Change password",
+    description="Change the authenticated user's password. Requires the current password.",
+)
+async def change_password(
+    data: ChangePasswordSchema,
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    user_service: user_dependency,
+) -> None:
+    """Change the current user's password after verifying the existing one."""
+    user_service.change_password(user_id=current_user.id, data=data)
+
+
+@router.post(
+    "/forgot-password",
+    summary="Forgot Password",
+    description="Initiates the password reset process by sending an email with a reset token.",
+    status_code=200,
+)
+@limiter.limit("3/minute")
+async def forgot_password(
+    request: Request,
+    data: ForgotPasswordSchema,
+    user_service: user_dependency,
+) -> dict:
+    """Initiate the password-reset flow for the given email."""
+    await user_service.forgot_password(email=data.email)
+    return {"message": "If that email exists, a reset link has been sent."}
+
+
+@router.post(
+    "/reset-password",
+    status_code=200,
+    summary="Reset password",
+    description="Complete the password-reset flow using the token from the reset email.",
+)
+async def reset_password(
+    data: ResetPasswordSchema,
+    user_service: user_dependency,
+) -> dict:
+    """Set a new password using a valid password-reset token."""
+    await user_service.reset_password(token=data.token, new_password=data.new_password)
+    return {"message": "Password has been reset successfully. Please log in."}

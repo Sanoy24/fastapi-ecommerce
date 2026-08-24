@@ -23,24 +23,20 @@ def test_create_order(client: TestClient, db_session: Session):
     # 1. Register User
     register_payload = {
         "email": "order_user@example.com",
-        "password": "password123",
+        "password": "Password1",
         "first_name": "Order",
         "last_name": "User",
-        "address": "123 Order St",
-        "city": "Order City",
-        "country": "Order Country",
-        "zip_code": "12345",
-        "phone": "1234567890"
+        "phone": "1234567890",
     }
     client.post("/users/register", json=register_payload)
 
     # 2. Login
     login_payload = {
         "email": "order_user@example.com",
-        "password": "password123"
+        "password": "Password1",
     }
     login_res = client.post("/users/login", json=login_payload)
-    token = login_res.json()["token"]
+    token = login_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
     # 3. Add Address
@@ -80,24 +76,20 @@ def test_get_orders(client: TestClient, db_session: Session):
     # 1. Register User
     register_payload = {
         "email": "get_order_user@example.com",
-        "password": "password123",
+        "password": "Password1",
         "first_name": "Order",
         "last_name": "User",
-        "address": "123 Order St",
-        "city": "Order City",
-        "country": "Order Country",
-        "zip_code": "12345",
-        "phone": "1234567890"
+        "phone": "1234567890",
     }
     client.post("/users/register", json=register_payload)
 
     # 2. Login
     login_payload = {
         "email": "get_order_user@example.com",
-        "password": "password123"
+        "password": "Password1",
     }
     login_res = client.post("/users/login", json=login_payload)
-    token = login_res.json()["token"]
+    token = login_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
     # 3. Setup data for an order

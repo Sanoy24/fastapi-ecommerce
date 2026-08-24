@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, select
 from typing import List, Optional
 
+from app.models.order import Order
+from app.models.order_item import OrderItem
 from app.models.product import Product
 from app.models.review import Review
 from app.models.user import User
@@ -13,7 +15,40 @@ class ReviewCrud:
     def __init__(self, db: Session):
         self.db = db
 
+    def has_purchased_product(self, user_id: int, product_id: int) -> bool:
+        """Return True if the user has at least one delivered/paid order containing this product."""
+        stmt = (
+            select(OrderItem.id)
+            .join(Order, OrderItem.order_id == Order.id)
+            .where(
+                OrderItem.product_id == product_id,
+                Order.user_id == user_id,
+                Order.status.in_(["paid", "shipped", "delivered"]),
+            )
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalar() is not None
+
     def create_review(self, review: ReviewCreate, user_id: int) -> Review:
+        if not self.has_purchased_product(user_id, review.product_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only review products you have purchased.",
+            )
+
+        # Prevent duplicate reviews
+        existing = self.db.execute(
+            select(Review.id).where(
+                Review.user_id == user_id,
+                Review.product_id == review.product_id,
+            ).limit(1)
+        ).scalar()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="You have already reviewed this product.",
+            )
+
         db_review = Review(
             user_id=user_id,
             product_id=review.product_id,
