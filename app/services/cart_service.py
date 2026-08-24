@@ -3,13 +3,18 @@ from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
+from sqlalchemy import select
+from app.models.cart import Cart
+from app.models.cart_item import CartItem
+from app.models.product import Product
+from app.models.coupon import Coupon
+from app.schema.cart_schema import CartItemCreate, CartItemUpdate
+from app.schema.coupon_schema import CouponPublic
+import datetime
+from app.core.logger import logger
 from app.core.exceptions import ProductException
 from app.crud.product import ProductCrud
 from app.crud.cart_item import CartCrud
-from app.models.cart import Cart
-from app.schema.cart_schema import CartItemCreate, CartItemUpdate
-from app.core.logger import logger
 
 
 class CartService:
@@ -42,11 +47,6 @@ class CartService:
         if product.stock_quantity < data.quantity:
             raise ProductException("Product out of stock")
 
-        # stmt = select(CartItem).where(
-        #     CartItem.cart_id == cart.id, CartItem.product_id == data.product_id
-        # )
-
-        # existing = self.db.scalar(stmt)
         existing = self.cart_crud.get_cart_item_by_product(cart.id, product.id)
 
         if existing:
@@ -79,8 +79,21 @@ class CartService:
 
     def get_cart_details(self, cart: Cart):
         items = []
-        subtotal = 0
-        total_items = 0
+        raw_subtotal = sum(item.quantity * float(item.product.price) for item in cart.cart_items)
+        subtotal = raw_subtotal
+        
+        if cart.coupon_id and cart.coupon:
+            if cart.coupon.is_valid and (cart.coupon.min_order_value is None or raw_subtotal >= float(cart.coupon.min_order_value)):
+                if cart.coupon.discount_type == "percentage":
+                    discount = raw_subtotal * (float(cart.coupon.discount_value) / 100)
+                    subtotal -= discount
+                elif cart.coupon.discount_type == "fixed":
+                    subtotal -= float(cart.coupon.discount_value)
+            
+            if subtotal < 0:
+                subtotal = 0.0
+        
+        total_items = sum(item.quantity for item in cart.cart_items)
 
         for item in cart.cart_items:
             product = item.product
@@ -97,15 +110,37 @@ class CartService:
                 }
             )
 
-            subtotal += item_sub
-            total_items += item.quantity
-
         return {
             "id": cart.id,
             "items": items,
+            "raw_subtotal": raw_subtotal,
             "subtotal": subtotal,
             "total_items": total_items,
+            "coupon_code": cart.coupon.code if cart.coupon else None,
         }
+        
+    def apply_coupon(self, cart: Cart, code: str) -> Cart:
+        coupon = self.db.execute(select(Coupon).where(Coupon.code == code)).scalar_one_or_none()
+        if not coupon:
+            raise HTTPException(status_code=404, detail="Coupon not found")
+            
+        if not coupon.is_valid:
+            raise HTTPException(status_code=400, detail="Coupon is invalid, expired, or usage limit reached")
+            
+        raw_subtotal = sum(item.quantity * float(item.product.price) for item in cart.cart_items)
+        if coupon.min_order_value and raw_subtotal < float(coupon.min_order_value):
+            raise HTTPException(status_code=400, detail=f"Minimum order value of {coupon.min_order_value} required")
+            
+        cart.coupon_id = coupon.id
+        self.db.commit()
+        self.db.refresh(cart)
+        return cart
+
+    def remove_coupon(self, cart: Cart) -> Cart:
+        cart.coupon_id = None
+        self.db.commit()
+        self.db.refresh(cart)
+        return cart
 
     def merge_carts(self, user_id: int, session_id: str):
         user_cart = self.cart_crud.get_cart_by_user_id(user_id=user_id)

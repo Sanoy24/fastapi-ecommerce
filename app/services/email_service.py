@@ -118,3 +118,28 @@ async def send_order_confirmation_email(
         html_body=html_body,
         text_body=text_body,
     )
+
+
+async def send_order_shipped_email(
+    to_address: str, order_number: str, tracking_number: str, carrier: str
+) -> None:
+    """Send an order dispatch/shipping email."""
+    html_body = f"""
+    <html><body>
+    <h2>Your Order is on the way! 🚚</h2>
+    <p>Great news! Your order <strong>#{order_number}</strong> has shipped.</p>
+    <p><strong>Carrier:</strong> {carrier}</p>
+    <p><strong>Tracking Number:</strong> {tracking_number}</p>
+    </body></html>
+    """
+    text_body = (
+        f"Your Order is on the way!\n\nOrder #{order_number} has shipped.\n"
+        f"Carrier: {carrier}\n"
+        f"Tracking Number: {tracking_number}\n"
+    )
+    await send_email(
+        to_address=to_address,
+        subject=f"Order #{order_number} Shipped",
+        html_body=html_body,
+        text_body=text_body,
+    )
