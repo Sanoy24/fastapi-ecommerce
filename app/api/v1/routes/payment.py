@@ -6,6 +6,7 @@ from app.schema.user_schema import UserPublic
 from app.services.payment_service import PaymentService
 from app.schema.payment_schema import PaymentIntentCreate, PaymentIntentResponse
 from app.api.v1.routes.user import get_current_user
+from app.utils.idempotency import check_idempotency, cache_idempotent_response
 
 router = APIRouter(tags=["payments"])
 
@@ -14,12 +15,18 @@ payment_service_dep = Annotated[PaymentService, Depends(get_payment_service_dep)
 
 
 @router.post("/create-intent", response_model=PaymentIntentResponse)
-def create_payment_intent(
+async def create_payment_intent(
     payment_data: PaymentIntentCreate,
     payment_service: payment_service_dep,
     current_user=Depends(get_current_user),
+    idempotency_key: str | None = Depends(check_idempotency),
 ):
-    return payment_service.create_payment_intent(current_user.id, payment_data.order_id)
+    response_data = payment_service.create_payment_intent(current_user.id, payment_data.order_id)
+    
+    if idempotency_key:
+        await cache_idempotent_response(idempotency_key, response_data.model_dump())
+        
+    return response_data
 
 
 @router.post("/webhook")

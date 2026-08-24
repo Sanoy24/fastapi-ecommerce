@@ -24,6 +24,8 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
+from app.utils.idempotency import IdempotentResponseException
+from fastapi.responses import JSONResponse
 
 from app.core.redis import redis_client
 from app.middleware.request_logger import LoggingMiddleware
@@ -131,6 +133,10 @@ if "pytest" not in sys.modules:
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.exception_handler(IdempotentResponseException)
+async def idempotency_exception_handler(request, exc: IdempotentResponseException):
+    return JSONResponse(status_code=exc.status_code, content=exc.content)
 
 
 @app.exception_handler(RequestValidationError)

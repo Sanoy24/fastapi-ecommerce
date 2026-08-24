@@ -91,3 +91,39 @@ async def remove_item(
 
     cart_service.remove_item(cart, item_id)
     return {"message": "Item removed"}
+
+
+@router.post("/coupon")
+async def apply_coupon(
+    request: Request,
+    code: str,
+    current_user: user_dep,
+    cart_service: cart_dependency,
+):
+    if current_user:
+        cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
+    else:
+        session_id = request.cookies.get("session_id") or generate_session_id()
+        cart = cart_service.get_or_create_cart(user_id=None, session_id=session_id)
+
+    cart_service.apply_coupon(cart, code)
+    return {"message": f"Coupon {code} applied successfully"}
+
+
+@router.delete("/coupon")
+async def remove_coupon(
+    request: Request,
+    current_user: user_dep,
+    cart_service: cart_dependency,
+):
+    if current_user:
+        cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
+    else:
+        session_id = request.cookies.get("session_id")
+        if not session_id:
+            return {"message": "Cart is empty"}
+        cart = cart_service.get_or_create_cart(user_id=None, session_id=session_id)
+
+    cart_service.remove_coupon(cart)
+    return {"message": "Coupon removed successfully"}
+

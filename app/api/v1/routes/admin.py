@@ -12,16 +12,22 @@ from app.schema.admin_schema import (
     ReviewAnalytics,
     UserManagementResponse,
     UpdateUserRoleRequest,
+    OrderListItem,
     OrderManagementResponse,
-    UpdateOrderStatusRequest,
-    MarkOrderShippedRequest,
+    OrderUpdateStatus,
+    OrderUpdateShipping,
     ReviewModerationResponse,
+    ReviewModerationItem,
     InventoryAlert,
     BulkInventoryUpdateRequest,
     BulkInventoryUpdateResponse,
+    SalesOverTime,
+    TopSellingProduct,
 )
 from app.schema.user_schema import UserPublic
+from app.services.email_service import send_order_shipped_email
 from sqlalchemy.orm import Session
+from fastapi import BackgroundTasks, HTTPException
 
 router = APIRouter(tags=["Admin"])
 
@@ -42,22 +48,96 @@ async def get_dashboard(
     admin_service: Annotated[AdminService, Depends(get_admin_service)],
     current_admin: Annotated[UserPublic, Depends(require_admin)],
 ):
-    """Get complete admin dashboard overview with all analytics"""
+    """Get high-level dashboard analytics"""
     return admin_service.get_dashboard_overview()
 
 
 @router.get(
     "/analytics/sales",
-    response_model=SalesAnalytics,
     summary="Get sales analytics",
-    description="Get detailed sales analytics including revenue and order statistics",
 )
-async def get_sales_analytics(
+def get_sales_analytics(
     admin_service: Annotated[AdminService, Depends(get_admin_service)],
     current_admin: Annotated[UserPublic, Depends(require_admin)],
 ):
     """Get sales analytics"""
     return admin_service.get_sales_analytics()
+
+
+@router.get(
+    "/analytics/sales/trends",
+    response_model=list[SalesOverTime],
+    summary="Get sales trends over time",
+)
+def get_sales_trends(
+    admin_service: Annotated[AdminService, Depends(get_admin_service)],
+    current_admin: Annotated[UserPublic, Depends(require_admin)],
+    days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
+):
+    """Get sales revenue and order counts over time (Admin only)."""
+    from sqlalchemy import select, func
+    from app.models.order import Order
+    from datetime import datetime, timedelta
+    
+    db = admin_service.db
+    cutoff = datetime.now() - timedelta(days=days)
+    
+    # SQLite friendly date truncation
+    stmt = (
+        select(
+            func.strftime('%Y-%m-%d', Order.order_date).label('date'),
+            func.sum(Order.total_amount).label('revenue'),
+            func.count(Order.id).label('orders_count')
+        )
+        .where(Order.order_date >= cutoff)
+        .where(Order.status != 'cancelled')
+        .group_by(func.strftime('%Y-%m-%d', Order.order_date))
+        .order_by('date')
+    )
+    
+    results = db.execute(stmt).all()
+    return [{"date": r.date, "revenue": r.revenue or 0.0, "orders_count": r.orders_count} for r in results]
+
+
+@router.get(
+    "/analytics/top-products",
+    response_model=list[TopSellingProduct],
+    summary="Top selling products",
+)
+def get_top_products(
+    admin_service: Annotated[AdminService, Depends(get_admin_service)],
+    current_admin: Annotated[UserPublic, Depends(require_admin)],
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Get the most sold products (Admin only)."""
+    from sqlalchemy import select, func
+    from app.models.order_item import OrderItem
+    from app.models.product import Product
+    from app.models.order import Order
+    
+    db = admin_service.db
+    stmt = (
+        select(
+            Product.id.label('product_id'),
+            Product.name.label('product_name'),
+            func.sum(OrderItem.quantity).label('total_quantity_sold'),
+            func.sum(OrderItem.quantity * OrderItem.unit_price).label('total_revenue')
+        )
+        .join(OrderItem, Product.id == OrderItem.product_id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(Order.status != 'cancelled')
+        .group_by(Product.id, Product.name)
+        .order_by(func.sum(OrderItem.quantity).desc())
+        .limit(limit)
+    )
+    
+    results = db.execute(stmt).all()
+    return [{
+        "product_id": r.product_id,
+        "product_name": r.product_name,
+        "total_quantity_sold": r.total_quantity_sold or 0,
+        "total_revenue": r.total_revenue or 0.0
+    } for r in results]
 
 
 @router.get(
@@ -166,56 +246,89 @@ async def list_all_orders(
     )
 
 
-@router.patch(
-    "/orders/{order_id}/status",
-    summary="Update order status",
-    description="Update an order's status",
-)
-async def update_order_status(
+@router.put("/orders/{order_id}/status", response_model=OrderListItem)
+def update_order_status(
     order_id: int,
-    status_update: UpdateOrderStatusRequest,
-    admin_service: Annotated[AdminService, Depends(get_admin_service)],
-    current_admin: Annotated[UserPublic, Depends(require_admin)],
+    payload: OrderUpdateStatus,
+    admin_user: Annotated[UserPublic, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
 ):
-    """Update an order's status"""
-    order = admin_service.update_order_status(
-        order_id=order_id, new_status=status_update.status
+    """Update order status (Admin)"""
+    from app.models.order import Order
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    order.status = payload.status
+    db.commit()
+    db.refresh(order)
+    
+    return OrderListItem(
+        id=order.id,
+        order_number=order.order_number,
+        user_id=order.user_id,
+        user_email=order.user.email,
+        total_amount=order.total_amount,
+        status=order.status,
+        payment_status=order.payment_status,
+        order_date=order.order_date,
+        shipped_at=order.shipped_at,
     )
-    return {
-        "message": "Order status updated successfully",
-        "order_id": order.id,
-        "new_status": order.status,
-    }
 
 
-@router.patch(
-    "/orders/{order_id}/shipping",
-    summary="Mark order as shipped",
-    description="Mark an order as shipped and set shipping timestamp",
-)
-async def mark_order_shipped(
+@router.put("/orders/{order_id}/shipping", response_model=OrderListItem)
+def update_order_shipping(
     order_id: int,
-    shipping_data: MarkOrderShippedRequest,
-    admin_service: Annotated[AdminService, Depends(get_admin_service)],
-    current_admin: Annotated[UserPublic, Depends(require_admin)],
+    payload: OrderUpdateShipping,
+    admin_user: Annotated[UserPublic, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ):
-    """Mark an order as shipped"""
-    order = admin_service.mark_order_shipped(
-        order_id=order_id, shipped_at=shipping_data.shipped_at
+    """Update order shipping details (Admin)"""
+    from app.models.order import Order
+    from datetime import datetime
+    
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    order.tracking_number = payload.tracking_number
+    order.shipping_carrier = payload.shipping_carrier
+    
+    if order.status != "shipped" and order.status != "delivered":
+        order.status = "shipped"
+        order.shipped_at = datetime.now()
+        
+        # Dispatch shipped email asynchronously
+        background_tasks.add_task(
+            send_order_shipped_email,
+            to_address=order.user.email,
+            order_number=order.order_number,
+            tracking_number=order.tracking_number,
+            carrier=order.shipping_carrier,
+        )
+        
+    db.commit()
+    db.refresh(order)
+    
+    return OrderListItem(
+        id=order.id,
+        order_number=order.order_number,
+        user_id=order.user_id,
+        user_email=order.user.email,
+        total_amount=order.total_amount,
+        status=order.status,
+        payment_status=order.payment_status,
+        order_date=order.order_date,
+        shipped_at=order.shipped_at,
     )
-    return {
-        "message": "Order marked as shipped",
-        "order_id": order.id,
-        "shipped_at": order.shipped_at,
-    }
 
 
-# Review Moderation Endpoints
+# --- REVIEWS ---
 @router.get(
     "/reviews/pending",
     response_model=ReviewModerationResponse,
     summary="Get pending reviews",
-    description="Get paginated list of reviews awaiting approval",
 )
 async def get_pending_reviews(
     admin_service: Annotated[AdminService, Depends(get_admin_service)],
@@ -231,7 +344,6 @@ async def get_pending_reviews(
     "/reviews",
     response_model=ReviewModerationResponse,
     summary="Get all reviews",
-    description="Get paginated list of all reviews",
 )
 async def get_all_reviews(
     admin_service: Annotated[AdminService, Depends(get_admin_service)],

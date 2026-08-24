@@ -12,6 +12,7 @@ from app.api.v1.routes import (
     review,
     user,
     wishlist,
+    coupon,
 )
 
 
@@ -27,3 +28,4 @@ def init_routes(app: FastAPI):
     app.include_router(router=admin.router, prefix="/admin")
     app.include_router(router=wishlist.router, prefix="/wishlist")
     app.include_router(router=elastic.router, prefix="/elastic")
+    app.include_router(router=coupon.router, prefix="/coupons")

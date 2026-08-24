@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends
 from app.schema.user_schema import UserPublic
 from app.services.order_service import OrderService
 from app.dependencies import get_current_user, get_order_service_dep
 from app.schema.order_schema import OrderCreateRequest, OrderResponse
+from app.utils.idempotency import check_idempotency, cache_idempotent_response
+from app.services.email_service import send_order_confirmation_email
+from fastapi import APIRouter, Depends, BackgroundTasks
 from typing import Annotated
 
 router = APIRouter(tags=["Orders"])
@@ -12,16 +14,30 @@ order_dependency = Annotated[OrderService, Depends(get_order_service_dep)]
 
 
 @router.post("", response_model=OrderResponse)
-def place_order(
+async def place_order(
     payload: OrderCreateRequest,
     current_user: user_dependency,
     order_service: order_dependency,
+    background_tasks: BackgroundTasks,
+    idempotency_key: str | None = Depends(check_idempotency),
 ):
-    return order_service.place_order(
+    response_data = order_service.place_order(
         user_id=current_user.id,
         shipping_id=payload.shipping_address_id,
         billing_id=payload.billing_address_id,
     )
+    
+    background_tasks.add_task(
+        send_order_confirmation_email,
+        to_address=current_user.email,
+        order_number=response_data.order_number,
+        total_amount=response_data.total_amount
+    )
+    
+    if idempotency_key:
+        await cache_idempotent_response(idempotency_key, response_data.model_dump())
+        
+    return response_data
 
 
 @router.get("", response_model=list[OrderResponse])
