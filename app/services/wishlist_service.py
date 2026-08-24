@@ -27,7 +27,7 @@ class WishlistService:
     ) -> WishlistActionResponse:
         """Add a product to user's wishlist"""
         # Check if product exists
-        product = self.product_crud.get_product_by_id(product_id=product_id)
+        product = self.product_crud.get_product_by_id(id=product_id)
         if not product:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
