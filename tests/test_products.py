@@ -8,14 +8,10 @@ def test_create_product_as_admin(client: TestClient, db_session: Session):
     # 1. Register a user
     register_payload = {
         "email": "admin@example.com",
-        "password": "password123",
+        "password": "Password1",
         "first_name": "Admin",
         "last_name": "User",
-        "address": "123 Admin St",
-        "city": "Admin City",
-        "country": "Admin Country",
-        "zip_code": "12345",
-        "phone": "1234567890"
+        "phone": "1234567890",
     }
     client.post("/users/register", json=register_payload)
 
@@ -28,10 +24,10 @@ def test_create_product_as_admin(client: TestClient, db_session: Session):
     # 3. Login
     login_payload = {
         "email": "admin@example.com",
-        "password": "password123"
+        "password": "Password1",
     }
     login_res = client.post("/users/login", json=login_payload)
-    token = login_res.json()["token"]
+    token = login_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
     # 4. Create Product
