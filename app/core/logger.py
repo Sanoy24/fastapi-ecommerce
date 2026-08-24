@@ -62,16 +62,17 @@ class LokiSink:
         )
         self.handler.emit(log_record)
 
-try:
-    loki_handler = logging_loki.LokiHandler(
-        url="http://loki:3100/loki/api/v1/push",
-        tags={"job": "fastapi-app"},
-        version="1",
-    )
-    logger.add(LokiSink(loki_handler), level="INFO")
-except Exception as e:
-    # Fallback if Loki is not available or lib is missing
-    print(f"Failed to initialize Loki handler: {e}")
+if "pytest" not in sys.modules:
+    try:
+        loki_handler = logging_loki.LokiHandler(
+            url="http://loki:3100/loki/api/v1/push",
+            tags={"job": "fastapi-app"},
+            version="1",
+        )
+        logger.add(LokiSink(loki_handler), level="INFO")
+    except Exception as e:
+        # Fallback if Loki is not available or lib is missing
+        print(f"Failed to initialize Loki handler: {e}")
 
 # Export the logger instance
 __all__ = ["logger"]

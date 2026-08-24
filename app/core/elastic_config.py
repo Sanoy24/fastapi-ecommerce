@@ -28,6 +28,10 @@ async def get_es_client() -> AsyncElasticsearch:
             sniff_on_start=False,
         )
 
+        import sys
+        if "pytest" in sys.modules:
+            return None
+
         for attempt in range(10):
             try:
                 logger.info(f"Elasticsearch ping attempt {attempt+1}/10...")
