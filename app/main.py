@@ -21,6 +21,10 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.core.limiter import limiter
+
 from app.core.redis import redis_client
 from app.middleware.request_logger import LoggingMiddleware
 from app.utils.es_utils import bulk_index_products, create_product_index
@@ -33,13 +37,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         client = await get_es_client()
         logger.info("Elasticsearch client initialized successfully")
+        
+        if client is not None:
+            await create_product_index(client)
+            await bulk_index_products(client)
     except Exception as e:
         logger.warning(
-            f"Failed to initialize Elasticsearch client: {e}. App will continue without ES."
+            f"Failed to initialize Elasticsearch client or index products: {e}. App will continue without ES."
         )
-    if client is not None:
-        await create_product_index(client)
-        await bulk_index_products(client)
     yield
     await redis_client.close()
     await close_es_client()
@@ -108,19 +113,24 @@ app.add_middleware(LoggingMiddleware)
 
 Instrumentator().instrument(app).expose(app)
 
-# Configure OpenTelemetry
-resource = Resource(attributes={
-    "service.name": "fastapi-app"
-})
+import sys
+if "pytest" not in sys.modules:
+    # Configure OpenTelemetry
+    resource = Resource(attributes={
+        "service.name": "fastapi-app"
+    })
 
-trace.set_tracer_provider(TracerProvider(resource=resource))
-tracer = trace.get_tracer(__name__)
+    trace.set_tracer_provider(TracerProvider(resource=resource))
+    tracer = trace.get_tracer(__name__)
 
-otlp_exporter = OTLPSpanExporter(endpoint="http://tempo:4317", insecure=True)
-span_processor = BatchSpanProcessor(otlp_exporter)
-trace.get_tracer_provider().add_span_processor(span_processor)
+    otlp_exporter = OTLPSpanExporter(endpoint="http://tempo:4317", insecure=True)
+    span_processor = BatchSpanProcessor(otlp_exporter)
+    trace.get_tracer_provider().add_span_processor(span_processor)
 
-FastAPIInstrumentor.instrument_app(app)
+    FastAPIInstrumentor.instrument_app(app)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.exception_handler(RequestValidationError)

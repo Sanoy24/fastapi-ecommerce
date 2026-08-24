@@ -4,7 +4,6 @@ from typing import Dict, Optional, Any
 import jwt
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from app.core.config import settings
-from app.schema.user_schema import TokenSchema
 
 # implement password hashing
 password_hash = PasswordHash.recommended()
@@ -19,13 +18,11 @@ def hash_password(password: str) -> str:
     return password_hash.hash(password)
 
 
-# implement password verification
 def verify_password(plain_password: str, hash: str) -> bool:
     """Compare the hash password and the plaintext password for verification"""
     return password_hash.verify(password=plain_password, hash=hash)
 
 
-# implement token generation
 def create_token(
     data: Dict[str, Any],
     expiration: Optional[timedelta] = None,
@@ -33,7 +30,7 @@ def create_token(
     audience: Optional[str] = None,
 ) -> str:
     """
-    Create a JWT token with expiration and optional issuer/audience.
+    Create a JWT access token with expiration and optional issuer/audience.
 
     Args:
         data: Payload data to encode.
@@ -42,7 +39,7 @@ def create_token(
         audience: Optional audience claim (aud).
 
     Returns:
-        TokenSchema with the encoded token.
+        Encoded JWT string.
     """
     now = datetime.now(timezone.utc)
     if expiration is None:
@@ -51,10 +48,9 @@ def create_token(
     expiration_time = now + expiration
     payload = {
         **data,
-        "iat": int(now.timestamp()),  # Issued-at timestamp
-        "exp": int(
-            expiration_time.timestamp()
-        ),  # Expiration timestamp (required as int)
+        "type": "access",
+        "iat": int(now.timestamp()),
+        "exp": int(expiration_time.timestamp()),
     }
     if issuer:
         payload["iss"] = issuer
@@ -67,7 +63,37 @@ def create_token(
     return token
 
 
-# token verification
+def create_refresh_token(user_id: int) -> str:
+    """
+    Create a long-lived JWT refresh token.
+
+    The token carries a 'type': 'refresh' claim so it cannot be used as an
+    access token.  Actual revocation is enforced by the service layer, which
+    stores the token JTI in Redis with a matching TTL.
+
+    Args:
+        user_id: The user's integer primary key.
+
+    Returns:
+        Encoded JWT refresh token string.
+    """
+    import uuid
+
+    now = datetime.now(timezone.utc)
+    expiration = timedelta(days=settings.JWT_REFRESH_EXP_DAYS)
+    expiration_time = now + expiration
+    payload = {
+        "sub": str(user_id),
+        "type": "refresh",
+        "jti": str(uuid.uuid4()),  # Unique ID — used for revocation
+        "iat": int(now.timestamp()),
+        "exp": int(expiration_time.timestamp()),
+    }
+    return jwt.encode(
+        payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
+
+
 def decode_access_token(token: str) -> Dict[str, Any]:
     """
     Verify and decode a JWT access token.
@@ -79,19 +105,53 @@ def decode_access_token(token: str) -> Dict[str, Any]:
         Decoded payload as dict.
 
     Raises:
-        TokenError: If token is invalid, expired, or malformed.
+        TokenError: If token is invalid, expired, malformed, or is a refresh token.
     """
     try:
         payload = jwt.decode(
             token,
             settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],  # List for security
+            algorithms=[settings.JWT_ALGORITHM],
             options={"verify_signature": True, "verify_exp": True},
         )
+        if payload.get("type") == "refresh":
+            raise TokenError("Refresh token cannot be used as an access token")
         return payload
     except ExpiredSignatureError:
         raise TokenError("Token has expired")
     except InvalidTokenError:
         raise TokenError("Invalid token")
-    except jwt.DecodeError:  # Covers other decode issues
+    except jwt.DecodeError:
         raise TokenError("Malformed token")
+
+
+def decode_refresh_token(token: str) -> Dict[str, Any]:
+    """
+    Verify and decode a JWT refresh token.
+
+    Args:
+        token: The JWT refresh token string.
+
+    Returns:
+        Decoded payload as dict (contains 'sub', 'jti').
+
+    Raises:
+        TokenError: If the token is invalid, expired, or is an access token.
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            options={"verify_signature": True, "verify_exp": True},
+        )
+        if payload.get("type") != "refresh":
+            raise TokenError("Access token cannot be used as a refresh token")
+        return payload
+    except ExpiredSignatureError:
+        raise TokenError("Refresh token has expired — please log in again")
+    except InvalidTokenError:
+        raise TokenError("Invalid refresh token")
+    except jwt.DecodeError:
+        raise TokenError("Malformed refresh token")
+

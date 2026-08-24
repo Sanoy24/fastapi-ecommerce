@@ -1,12 +1,22 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 
 
 class OrderItemResponse(BaseModel):
+    id: int
     product_id: int
     quantity: int
     unit_price: float
+
+    model_config = {"from_attributes": True}
+
+
+class AddressSummary(BaseModel):
+    id: int
+    street: str
+    city: str
+    country: str
 
     model_config = {"from_attributes": True}
 
@@ -16,7 +26,10 @@ class OrderResponse(BaseModel):
     order_number: str
     total_amount: float
     status: str
+    payment_status: str
+    tx_ref: str
     order_date: datetime
+    shipped_at: Optional[datetime] = None
     order_items: List[OrderItemResponse]
 
     model_config = {"from_attributes": True}
@@ -25,3 +38,4 @@ class OrderResponse(BaseModel):
 class OrderCreateRequest(BaseModel):
     shipping_address_id: int
     billing_address_id: int
+
