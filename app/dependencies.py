@@ -17,6 +17,7 @@ from app.services.category_service import CategoryService
 from app.services.elasticsearch_service import ElasticService
 from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
+from app.services.coupon_service import CouponService
 from app.services.product_service import ProductService
 from app.services.review_service import ReviewService
 from app.services.user_service import UserService
@@ -165,3 +166,7 @@ async def get_optional_user(
 
     except Exception:
         return None
+
+def get_coupon_service_dep(db: Session = Depends(get_db)):
+    from app.services.coupon_service import CouponService
+    return CouponService(db)
