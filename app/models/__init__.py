@@ -27,6 +27,7 @@ from .shipment import Shipment
 from .brand import Brand
 from .product_image import ProductImage
 from .product_variant import ProductVariant
+from .outbox_event import OutboxEvent
 
 __all__ = [
     "User",
@@ -50,4 +51,5 @@ __all__ = [
     "Brand",
     "ProductImage",
     "ProductVariant",
+    "OutboxEvent",
 ]

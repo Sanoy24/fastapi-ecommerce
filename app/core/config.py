@@ -3,7 +3,7 @@ from typing import List
 
 
 class Setting(BaseSettings):
-    Database_url: str = ""
+    Database_url: str = "postgresql://postgres:postgres@localhost:5432/ecommerce"
     JWT_ALGORITHM: str = "HS256"
     JWT_SECRET_KEY: str = ""
     JWT_DEFAULT_EXP_MINUTES: int = 30

@@ -141,6 +141,21 @@ class UserService:
             expiration=timedelta(minutes=30),
         )
         new_refresh_token = create_refresh_token(user_id=user.id)
+
+        # Refresh Token Rotation: Revoke the old token after issuing a new one
+        if self.redis is not None:
+            # calculate remaining TTL for the old token
+            exp = payload.get("exp")
+            if exp:
+                import time
+                ttl = int(exp) - int(time.time())
+                if ttl > 0:
+                    await self.redis.client.setex(
+                        f"{_REFRESH_TOKEN_PREFIX}{jti}",
+                        ttl,
+                        "revoked"
+                    )
+
         return TokenSchema(
             access_token=new_access_token,
             refresh_token=new_refresh_token,

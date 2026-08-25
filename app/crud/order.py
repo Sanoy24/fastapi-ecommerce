@@ -190,6 +190,25 @@ class OrderCrud:
                 order_id=order.id
             )
             self.db.add(usage)
+            
+        # Update order history
+        event = OrderEvent(
+            order_id=order.id, status="pending", notes="Order placed successfully"
+        )
+        self.db.add(event)
+
+        # Outbox Pattern: Insert event into outbox_events in the same transaction
+        from app.models.outbox_event import OutboxEvent
+        outbox_event = OutboxEvent(
+            topic="order.created",
+            payload={
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "user_id": order.user_id,
+                "total_amount": float(order.total_amount),
+            }
+        )
+        self.db.add(outbox_event)
 
         self.db.commit()
         self.db.refresh(order)

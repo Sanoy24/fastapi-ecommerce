@@ -13,14 +13,7 @@ naming_convention = {
     "pk": "pk_%(table_name)s"
 }
 
-# SQLite requires check_same_thread=False; other DBs don't support this arg
-_connect_args = (
-    {"check_same_thread": False}
-    if settings.Database_url.startswith("sqlite")
-    else {}
-)
-
-engine = create_engine(settings.Database_url, connect_args=_connect_args)
+engine = create_engine(settings.Database_url)
 
 
 class Base(DeclarativeBase):
