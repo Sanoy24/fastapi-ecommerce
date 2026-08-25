@@ -112,6 +112,44 @@ class CartService:
             
             if subtotal < 0:
                 subtotal = 0.0
+                
+        # Evaluate Promotions
+        from app.models.promotion import Promotion
+        active_promotions = self.db.scalars(
+            select(Promotion).where(Promotion.is_active == True)
+        ).all()
+        
+        applied_promotions = []
+        for promo in active_promotions:
+            if promo.type == "percentage_on_category" and promo.conditions and promo.rewards:
+                target_cat = promo.conditions.get("category_id")
+                discount_pct = promo.rewards.get("discount_percentage", 0)
+                if target_cat and discount_pct:
+                    for item in cart.cart_items:
+                        if item.product.category_id == target_cat:
+                            price = _get_price(item)
+                            discount = (price * item.quantity) * (discount_pct / 100)
+                            subtotal -= discount
+                            applied_promotions.append(promo.name)
+            
+            elif promo.type == "buy_x_get_y" and promo.conditions and promo.rewards:
+                target_prod = promo.conditions.get("product_id")
+                buy_qty = promo.conditions.get("buy_quantity", 1)
+                get_qty = promo.rewards.get("get_quantity", 1)
+                if target_prod:
+                    for item in cart.cart_items:
+                        if item.product_id == target_prod and item.quantity >= buy_qty:
+                            # Simplification: discount the get_qty
+                            price = _get_price(item)
+                            discount_sets = item.quantity // (buy_qty + get_qty)
+                            if discount_sets == 0 and item.quantity > buy_qty:
+                                discount_sets = 1
+                            discount = discount_sets * get_qty * price
+                            subtotal -= discount
+                            applied_promotions.append(promo.name)
+                            
+        if subtotal < 0:
+            subtotal = 0.0
         
         total_items = sum(item.quantity for item in cart.cart_items)
 
@@ -177,6 +215,7 @@ class CartService:
             "discount_amount": raw_subtotal - subtotal,
             "estimated_tax": estimated_tax,
             "total_amount": total_amount,
+            "applied_promotions": applied_promotions,
         }
         
     def apply_coupon(self, cart: Cart, code: str) -> Cart:

@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from app.models.brand import Brand
 from app.schema.brand_schema import BrandCreate, BrandUpdate
 from app.utils.generate_slug import generate_slug
-from app.core.exceptions import BaseException
+from app.core.exceptions import BrandException
 
 class BrandCrud:
     def __init__(self, db: Session):
@@ -23,7 +23,7 @@ class BrandCrud:
             return brand
         except IntegrityError as e:
             self.db.rollback()
-            raise BaseException("Brand creation failed due to duplicate name.") from e
+            raise BrandException(str(e)) from e
 
     def get_brand_by_id(self, brand_id: int) -> Brand | None:
         stmt = select(Brand).where(Brand.id == brand_id)

@@ -8,7 +8,7 @@ from app.core.logger import logger
 from app.models.category import Category
 from app.models.product import Product
 from app.schema.admin_schema import BulkInventoryUpdateItem, BulkInventoryUpdateResponse
-from app.schema.common_schema import PaginatedResponse, PaginationLinks, PaginationMeta
+from app.schema.common_schema import PaginatedResponse, PaginationLinks, PaginationMeta, CursorPaginatedResponse
 from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
 from app.schema.product_variant_schema import ProductVariantCreate, ProductVariantUpdate
 from app.utils.generate_slug import generate_sku, generate_slug
@@ -219,6 +219,33 @@ class ProductCrud:
             data=items,
             meta=meta,
             links=links,
+        )
+
+    def list_products_cursor(
+        self,
+        cursor: int | None = None,
+        limit: int = 20
+    ) -> CursorPaginatedResponse[ProductResponse]:
+        """
+        Cursor-based pagination for products, ordered by id descending.
+        """
+        stmt = select(Product).where(Product.status == "active").order_by(Product.id.desc())
+        if cursor is not None:
+            stmt = stmt.where(Product.id < cursor)
+        
+        # Fetch limit + 1 to determine if there are more items
+        items = self.db.scalars(stmt.limit(limit + 1)).all()
+        
+        has_more = len(items) > limit
+        if has_more:
+            items = items[:-1]
+            
+        next_cursor = items[-1].id if items else None
+        
+        return CursorPaginatedResponse(
+            data=items,
+            next_cursor=next_cursor,
+            has_more=has_more
         )
 
     def get_products_by_category_id(self, category_id: int) -> list[Product]:

@@ -24,6 +24,9 @@ class Cart(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
     )
+    last_activity_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
+    )
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="carts")

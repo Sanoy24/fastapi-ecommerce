@@ -33,6 +33,8 @@ from .price_history import PriceHistory
 from .tax_rate import TaxRate
 from .shipping import ShippingZone, ShippingMethod, ShippingRate
 from .product_relation import ProductRelation
+from .promotion import Promotion
+from .review_vote import ReviewVote
 
 __all__ = [
     "User",

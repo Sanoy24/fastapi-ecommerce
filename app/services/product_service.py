@@ -9,7 +9,7 @@ from app.core.redis import RedisClient
 from app.crud.category import CategoryCrud
 from app.crud.product import ProductCrud
 from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
-from app.schema.common_schema import PaginatedResponse
+from app.schema.common_schema import PaginatedResponse, CursorPaginatedResponse
 from app.schema.product_image_schema import ProductImageResponse
 from app.schema.product_variant_schema import ProductVariantCreate, ProductVariantUpdate, ProductVariantResponse
 
@@ -125,6 +125,22 @@ class ProductService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="failed to fetch products",
+            )
+
+    def get_all_products_cursor(
+        self,
+        cursor: int | None = None,
+        limit: int = 20
+    ) -> CursorPaginatedResponse[ProductResponse]:
+        try:
+            products = self.crud.list_products_cursor(cursor, limit)
+            products.data = [ProductResponse.model_validate(p) for p in products.data]
+            return products
+        except Exception as e:
+            logger.info(f"exception: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="failed to fetch products by cursor",
             )
 
     def update_product(self, id: int, update_dto: ProductUpdate) -> ProductResponse:

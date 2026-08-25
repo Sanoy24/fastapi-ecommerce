@@ -12,3 +12,7 @@ class ProductException(Exception):
 
 class OrderException(Exception):
     pass
+
+
+class BrandException(Exception):
+    pass

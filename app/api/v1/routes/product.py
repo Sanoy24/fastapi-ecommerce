@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, File, Path, Query, UploadFile, status
-from app.schema.common_schema import PaginatedResponse
+from app.schema.common_schema import PaginatedResponse, CursorPaginatedResponse
 from app.schema.product_schema import ProductCreate, ProductUpdate, ProductResponse
 from app.schema.search_schema import (
     AvailabilityFilter,
@@ -11,7 +11,7 @@ from app.services.product_service import ProductService
 from app.dependencies import get_product_service_dep, require_admin
 from app.schema.user_schema import UserPublic
 from app.utils.upload import save_product_image
-from typing import Annotated, List
+from typing import Annotated, List, Union
 from app.core.logger import logger
 from fastapi_cache.decorator import cache
 
@@ -34,10 +34,12 @@ async def create_product(
     return product
 
 
-@router.get("", response_model=PaginatedResponse[ProductResponse])
+@router.get("", response_model=Union[PaginatedResponse[ProductResponse], CursorPaginatedResponse[ProductResponse]])
 @cache(expire=60)
 async def get_all_products(
     product_service: product_dependency,
+    cursor: Annotated[int | None, Query(description="Cursor for pagination")] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 10,
     search: Annotated[str | None, Query(min_length=1, max_length=255)] = None,
@@ -48,25 +50,13 @@ async def get_all_products(
     availability: AvailabilityFilter = AvailabilityFilter.ALL,
     sort_by: SortByField = SortByField.ID,
     sort_order: SortOrder = SortOrder.ASC,
-) -> PaginatedResponse[ProductResponse]:
+) -> Union[PaginatedResponse[ProductResponse], CursorPaginatedResponse[ProductResponse]]:
     """
-    Get all products with advanced filtering and sorting.
-
-    **Filters:**
-    - `search`: Search in product name and description (case-insensitive)
-    - `category_id`: Filter by category
-    - `min_price`, `max_price`: Price range filter
-    - `min_rating`: Minimum average rating (0-5)
-    - `availability`: Stock availability (all, in_stock, out_of_stock)
-
-    **Sorting:**
-    - `sort_by`: Field to sort by (id, name, price, rating, popularity, created_at)
-    - `sort_order`: Sort direction (asc, desc)
-
-    **Pagination:**
-    - `page`: Page number (1-indexed)
-    - `per_page`: Items per page (1-100)
+    Get all products with advanced filtering and sorting. If `cursor` is provided, uses cursor pagination (faster).
     """
+    if cursor is not None:
+        return product_service.get_all_products_cursor(cursor, limit)
+        
     return product_service.get_all_products(
         page,
         per_page,

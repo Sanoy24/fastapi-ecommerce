@@ -31,3 +31,8 @@ class PaginatedResponse(BaseModel, Generic[T]):
     links: Optional[PaginationLinks] = Field(
         None, description="HATEOAS links for navigation"
     )
+
+class CursorPaginatedResponse(BaseModel, Generic[T]):
+    data: List[T] = Field(..., description="List of items")
+    next_cursor: Optional[int] = Field(None, description="Cursor for the next page")
+    has_more: bool = Field(..., description="Whether there are more items to fetch")

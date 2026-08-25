@@ -27,6 +27,9 @@ class Review(Base):
         DateTime, default=func.current_timestamp()
     )
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    helpful_votes: Mapped[int] = mapped_column(Integer, default=0)
+    unhelpful_votes: Mapped[int] = mapped_column(Integer, default=0)
+    report_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="reviews")

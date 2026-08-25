@@ -445,7 +445,7 @@ async def verify_mfa_login(
     request: Request,
     data: MFAVerifyRequest,
     challenge_token: str = Body(..., embed=True),
-    user_service: user_dependency = Depends(get_user_service_dep),
+    user_service: user_dependency,
 ) -> TokenSchema:
     return user_service.verify_mfa_login(challenge_token, data.code)
 

@@ -79,3 +79,26 @@ def delete_review(
     Delete a review. Only the owner or an admin can delete it.
     """
     review_service.delete_review(review_id=review_id, current_user=current_user)
+
+@router.post("/{review_id}/vote")
+def vote_review(
+    review_id: int,
+    is_helpful: bool,
+    review_service: review_dependency,
+    current_user: user_dependency,
+):
+    """
+    Vote a review as helpful or unhelpful.
+    """
+    return review_service.vote_review(review_id=review_id, user_id=current_user.id, is_helpful=is_helpful)
+
+@router.post("/{review_id}/report")
+def report_review(
+    review_id: int,
+    review_service: review_dependency,
+    current_user: user_dependency,
+):
+    """
+    Report a review for moderation.
+    """
+    return review_service.report_review(review_id=review_id)
