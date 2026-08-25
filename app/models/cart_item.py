@@ -1,5 +1,6 @@
 from sqlalchemy import Integer, ForeignKey, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Optional
 from datetime import datetime
 from app.db.database import Base
 
@@ -16,6 +17,9 @@ class CartItem(Base):
     product_id: Mapped[int] = mapped_column(
         ForeignKey("products.id", ondelete="CASCADE"), nullable=False
     )
+    variant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True
+    )
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     added_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.current_timestamp()
@@ -24,3 +28,4 @@ class CartItem(Base):
     # Relationships
     cart: Mapped["Cart"] = relationship("Cart", back_populates="cart_items")
     product: Mapped["Product"] = relationship("Product", back_populates="cart_items")
+    variant: Mapped[Optional["ProductVariant"]] = relationship("ProductVariant")

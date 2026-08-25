@@ -11,7 +11,10 @@ from app.models.order_event import OrderEvent
 from app.models.product import Product
 from app.models.cart_item import CartItem
 from app.models.address import Address
+from app.models.coupon_usage import CouponUsage
 from app.models.inventory_reservation import InventoryReservation
+from app.models.inventory_transaction import InventoryTransaction
+from app.models.shipment import Shipment
 from app.core.exceptions import OrderException
 from app.models.user import User
 from app.utils.order_utils import generate_order_number, generate_trx_ref
@@ -42,20 +45,32 @@ class OrderCrud:
 
     def validate_stock(self, items: list[CartItem]):
         for item in items:
-            product = (
-                self.db.execute(
-                    select(Product).where(Product.id == item.product_id).with_for_update()
+            if item.variant_id:
+                from app.models.product_variant import ProductVariant
+                variant = (
+                    self.db.execute(
+                        select(ProductVariant).where(ProductVariant.id == item.variant_id).with_for_update()
+                    ).scalars().first()
                 )
-                .scalars()
-                .first()
-            )
-            if not product:
-                raise OrderException(f"Product not found: {item.product_id}")
-            if product.available_stock < item.quantity:
-                raise OrderException(
-                    f"Not enough stock for {product.name}. "
-                    f"Available: {product.available_stock}"
+                if not variant:
+                    raise OrderException(f"Variant not found: {item.variant_id}")
+                if variant.stock_quantity < item.quantity:
+                    raise OrderException(f"Not enough stock for variant. Available: {variant.stock_quantity}")
+            else:
+                product = (
+                    self.db.execute(
+                        select(Product).where(Product.id == item.product_id).with_for_update()
+                    )
+                    .scalars()
+                    .first()
                 )
+                if not product:
+                    raise OrderException(f"Product not found: {item.product_id}")
+                if product.available_stock < item.quantity:
+                    raise OrderException(
+                        f"Not enough stock for {product.name}. "
+                        f"Available: {product.available_stock}"
+                    )
 
     def create_order(self, user_id: int, shipping_id: int, billing_id: int):
         shipping_address = self.validate_address(user_id, shipping_id)
@@ -66,11 +81,25 @@ class OrderCrud:
         self.validate_stock(items)
         
         cart = items[0].cart
-        raw_subtotal = sum(i.product.price * i.quantity for i in items)
+        def _get_price(i: CartItem) -> float:
+            if i.variant_id and i.variant:
+                return float(i.variant.price)
+            return float(i.product.price)
+        
+        raw_subtotal = sum(_get_price(i) * i.quantity for i in items)
         subtotal = float(raw_subtotal)
         discount = 0.0
         
         if cart.coupon and cart.coupon.is_valid:
+            # Check if this user already used this coupon
+            usage = self.db.query(CouponUsage).filter(
+                CouponUsage.coupon_id == cart.coupon_id,
+                CouponUsage.user_id == user_id
+            ).first()
+            
+            if usage:
+                raise OrderException("You have already used this coupon.")
+
             if cart.coupon.min_order_value is None or subtotal >= float(cart.coupon.min_order_value):
                 if cart.coupon.discount_type == "percentage":
                     discount = subtotal * (float(cart.coupon.discount_value) / 100)
@@ -106,10 +135,12 @@ class OrderCrud:
 
         # Create order items + reserve stock
         for item in items:
+            price = _get_price(item)
             order_item = OrderItem(
                 order_id=order.id,
                 product_id=item.product_id,
-                unit_price=item.product.price,
+                variant_id=item.variant_id,
+                unit_price=price,
                 quantity=item.quantity,
             )
             self.db.add(order_item)
@@ -122,6 +153,20 @@ class OrderCrud:
                 expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15)
             )
             self.db.add(reservation)
+
+            # Record inventory transaction for reservation
+            qty_before = item.variant.stock_quantity if item.variant_id and item.variant else item.product.stock_quantity
+            inv_tx = InventoryTransaction(
+                product_id=item.product_id,
+                order_id=order.id,
+                transaction_type="reservation",
+                quantity_change=0,  # stock_quantity doesn't change yet, but available_stock effectively does
+                quantity_before=qty_before,
+                quantity_after=qty_before,
+                note=f"Reserved {item.quantity} units for order {order.order_number}",
+                created_by=user_id
+            )
+            self.db.add(inv_tx)
 
         # Create initial order event
         event = OrderEvent(
@@ -136,6 +181,15 @@ class OrderCrud:
         # Clear cart
         for item in items:
             self.db.delete(item)
+
+        # Record coupon usage if applicable
+        if cart.coupon_id and discount > 0:
+            usage = CouponUsage(
+                coupon_id=cart.coupon_id,
+                user_id=user_id,
+                order_id=order.id
+            )
+            self.db.add(usage)
 
         self.db.commit()
         self.db.refresh(order)
@@ -307,17 +361,41 @@ class OrderCrud:
         return order
 
     def mark_order_shipped(
-        self, order_id: int, shipped_at: Optional[datetime] = None
+        self, order_id: int, tracking_number: Optional[str] = None, carrier: Optional[str] = None, shipped_at: Optional[datetime] = None
     ) -> Order:
-        """Mark an order as shipped"""
+        """Mark an order as shipped and create a shipment record"""
         order = self.db.query(Order).filter(Order.id == order_id).first()
         if not order:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
             )
 
+        if order.status not in ["paid", "processing"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=f"Cannot ship order in status {order.status}"
+            )
+
         order.status = "shipped"
         order.shipped_at = shipped_at or datetime.now()
+        
+        # Create Shipment record
+        shipment = Shipment(
+            order_id=order.id,
+            tracking_number=tracking_number,
+            carrier=carrier,
+            status="shipped",
+            shipped_at=order.shipped_at
+        )
+        self.db.add(shipment)
+        
+        event = OrderEvent(
+            order_id=order.id,
+            from_status="processing",
+            to_status="shipped",
+            note=f"Order shipped via {carrier} with tracking {tracking_number}" if tracking_number else "Order shipped",
+        )
+        self.db.add(event)
+
         self.db.commit()
         self.db.refresh(order)
         return order

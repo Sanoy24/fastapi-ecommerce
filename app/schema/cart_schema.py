@@ -4,6 +4,7 @@ from typing import List
 
 class CartItemCreate(BaseModel):
     product_id: int
+    variant_id: int | None = None
     quantity: int = Field(default=1, ge=1)
 
 
@@ -14,6 +15,7 @@ class CartItemUpdate(BaseModel):
 class CartItemResponse(BaseModel):
     id: int
     product_id: int
+    variant_id: int | None = None
     quantity: int
     product_name: str  # ✅ FIXED: should be string
     unit_price: float

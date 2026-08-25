@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.api.v1.routes import (
     admin,
+    brand,
     cart,
     category,
     elastic,
@@ -21,6 +22,7 @@ def init_routes(app: FastAPI):
     app.include_router(router=user.router, prefix="/users")
     app.include_router(router=category.router, prefix="/category")
     app.include_router(router=product.router, prefix="/product")
+    app.include_router(router=brand.router, prefix="/brands")
     app.include_router(router=cart.router, prefix="/cart")
     app.include_router(router=order.router, prefix="/order")
     app.include_router(router=review.router, prefix="/reviews")

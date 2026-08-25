@@ -279,32 +279,24 @@ def update_order_shipping(
     db: Annotated[Session, Depends(get_db)],
     background_tasks: BackgroundTasks,
 ):
-    """Update order shipping details (Admin)"""
-    from app.models.order import Order
-    from datetime import datetime
+    """Update order shipping details and create shipment (Admin)"""
+    from app.crud.order import OrderCrud
     
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+    order_crud = OrderCrud(db)
+    order = order_crud.mark_order_shipped(
+        order_id=order_id,
+        tracking_number=payload.tracking_number,
+        carrier=payload.shipping_carrier
+    )
         
-    order.tracking_number = payload.tracking_number
-    order.shipping_carrier = payload.shipping_carrier
-    
-    if order.status != "shipped" and order.status != "delivered":
-        order.status = "shipped"
-        order.shipped_at = datetime.now()
-        
-        # Dispatch shipped email asynchronously
-        background_tasks.add_task(
-            send_order_shipped_email,
-            to_address=order.user.email,
-            order_number=order.order_number,
-            tracking_number=order.tracking_number,
-            carrier=order.shipping_carrier,
-        )
-        
-    db.commit()
-    db.refresh(order)
+    # Dispatch shipped email asynchronously
+    background_tasks.add_task(
+        send_order_shipped_email,
+        to_address=order.user.email,
+        order_number=order.order_number,
+        tracking_number=payload.tracking_number,
+        carrier=payload.shipping_carrier,
+    )
     
     return OrderListItem(
         id=order.id,

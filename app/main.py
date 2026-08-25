@@ -34,11 +34,15 @@ from app.middleware.request_logger import LoggingMiddleware
 from app.utils.es_utils import bulk_index_products, create_product_index
 from app.workers.reservation_cleanup import cleanup_expired_reservations_loop
 import asyncio
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await redis_client.connect()
+    
+    FastAPICache.init(RedisBackend(redis_client.client), prefix="fastapi-cache")
     
     # Start the reservation cleanup background task
     cleanup_task = asyncio.create_task(cleanup_expired_reservations_loop())

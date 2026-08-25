@@ -10,6 +10,8 @@ from app.crud.category import CategoryCrud
 from app.crud.product import ProductCrud
 from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
 from app.schema.common_schema import PaginatedResponse
+from app.schema.product_image_schema import ProductImageResponse
+from app.schema.product_variant_schema import ProductVariantCreate, ProductVariantUpdate, ProductVariantResponse
 
 
 class ProductService:
@@ -211,3 +213,39 @@ class ProductService:
             )
 
         return suggestions
+
+    def add_gallery_image(self, product_id: int, url: str, is_primary: bool = False, alt_text: str = None) -> ProductImageResponse:
+        self.crud.get_product_by_id(product_id) # ensures product exists
+        image = self.crud.add_product_image(product_id, url, is_primary, alt_text)
+        return ProductImageResponse.model_validate(image)
+
+    def get_gallery_images(self, product_id: int) -> List[ProductImageResponse]:
+        self.crud.get_product_by_id(product_id) # ensures product exists
+        images = self.crud.get_product_images(product_id)
+        return [ProductImageResponse.model_validate(i) for i in images]
+
+    def delete_gallery_image(self, image_id: int) -> None:
+        deleted = self.crud.delete_product_image(image_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Product image not found")
+
+    def add_product_variant(self, product_id: int, variant_dto: ProductVariantCreate) -> ProductVariantResponse:
+        self.crud.get_product_by_id(product_id)
+        variant = self.crud.add_product_variant(product_id, variant_dto)
+        return ProductVariantResponse.model_validate(variant)
+
+    def get_product_variants(self, product_id: int) -> List[ProductVariantResponse]:
+        self.crud.get_product_by_id(product_id)
+        variants = self.crud.get_product_variants(product_id)
+        return [ProductVariantResponse.model_validate(v) for v in variants]
+
+    def update_product_variant(self, variant_id: int, variant_dto: ProductVariantUpdate) -> ProductVariantResponse:
+        variant = self.crud.update_product_variant(variant_id, variant_dto)
+        if not variant:
+            raise HTTPException(status_code=404, detail="Product variant not found")
+        return ProductVariantResponse.model_validate(variant)
+
+    def delete_product_variant(self, variant_id: int) -> None:
+        deleted = self.crud.delete_product_variant(variant_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Product variant not found")

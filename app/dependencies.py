@@ -14,10 +14,11 @@ from app.schema.user_schema import UserPublic
 from app.services.address_service import AddressService
 from app.services.cart_service import CartService
 from app.services.category_service import CategoryService
+from app.services.coupon_service import CouponService
 from app.services.elasticsearch_service import ElasticService
+from app.services.email_service import EmailService
 from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
-from app.services.coupon_service import CouponService
 from app.services.product_service import ProductService
 from app.services.review_service import ReviewService
 from app.services.user_service import UserService
@@ -85,6 +86,14 @@ def get_product_service_dep(
 
 def get_cart_service_dep(db: Annotated[Session, Depends(get_db)]) -> CartService:
     return CartService(db=db)
+
+
+def get_brand_service_dep(db: Session = Depends(get_db)) -> BrandService:
+    return BrandService(db=db)
+
+
+def get_email_service_dep(db: Session = Depends(get_db)) -> EmailService:
+    return EmailService(db=db)
 
 
 def get_order_service_dep(db: Annotated[Session, Depends(get_db)]) -> OrderService:

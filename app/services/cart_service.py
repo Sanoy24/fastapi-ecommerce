@@ -44,19 +44,28 @@ class CartService:
         product = self.prod_crud.get_product_by_id(data.product_id)
         if not product:
             raise HTTPException(status_code=404, detail="product not found")
-        if product.stock_quantity < data.quantity:
-            raise ProductException("Product out of stock")
 
-        existing = self.cart_crud.get_cart_item_by_product(cart.id, product.id)
+        if data.variant_id:
+            from app.models.product_variant import ProductVariant
+            variant = self.db.scalar(select(ProductVariant).where(ProductVariant.id == data.variant_id))
+            if not variant or variant.product_id != product.id:
+                raise HTTPException(status_code=404, detail="Variant not found")
+            if variant.stock_quantity < data.quantity:
+                raise ProductException("Variant out of stock")
+        else:
+            if product.stock_quantity < data.quantity:
+                raise ProductException("Product out of stock")
+
+        existing = self.cart_crud.get_cart_item_by_product(cart.id, product.id, data.variant_id)
 
         if existing:
             result = self.cart_crud.update_existing_cart_item(
-                cart.id, product.id, data.quantity
+                cart.id, product.id, data.quantity, data.variant_id
             )
             return result
 
         new_item = self.cart_crud.add_new_cart_item(
-            cart_id=cart.id, product_id=product.id, quantity=data.quantity
+            cart_id=cart.id, product_id=product.id, quantity=data.quantity, variant_id=data.variant_id
         )
         return new_item
 
@@ -79,7 +88,12 @@ class CartService:
 
     def get_cart_details(self, cart: Cart):
         items = []
-        raw_subtotal = sum(item.quantity * float(item.product.price) for item in cart.cart_items)
+        def _get_price(item: CartItem) -> float:
+            if item.variant_id and item.variant:
+                return float(item.variant.price)
+            return float(item.product.price)
+            
+        raw_subtotal = sum(item.quantity * _get_price(item) for item in cart.cart_items)
         subtotal = raw_subtotal
         
         coupon = cart.coupon
@@ -103,15 +117,21 @@ class CartService:
 
         for item in cart.cart_items:
             product = item.product
-            item_sub = product.price * item.quantity
+            price = _get_price(item)
+            item_sub = price * item.quantity
+
+            name = product.name
+            if item.variant_id and item.variant:
+                name = f"{product.name} - {item.variant.name}"
 
             items.append(
                 {
                     "id": item.id,
                     "product_id": product.id,
+                    "variant_id": item.variant_id,
                     "quantity": item.quantity,
-                    "product_name": product.name,
-                    "unit_price": product.price,
+                    "product_name": name,
+                    "unit_price": price,
                     "subtotal": item_sub,
                 }
             )
@@ -170,7 +190,7 @@ class CartService:
 
         for item in anon_cart.cart_items:
             existing = self.cart_crud.get_cart_item_by_product(
-                user_cart.id, item.product_id
+                user_cart.id, item.product_id, item.variant_id
             )
 
             if existing:

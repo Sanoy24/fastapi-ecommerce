@@ -13,6 +13,7 @@ from app.schema.user_schema import UserPublic
 from app.utils.upload import save_product_image
 from typing import Annotated, List
 from app.core.logger import logger
+from fastapi_cache.decorator import cache
 
 router = APIRouter(tags=["Product"])
 product_dependency = Annotated[ProductService, Depends(get_product_service_dep)]
@@ -34,6 +35,7 @@ async def create_product(
 
 
 @router.get("", response_model=PaginatedResponse[ProductResponse])
+@cache(expire=60)
 async def get_all_products(
     product_service: product_dependency,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -110,6 +112,7 @@ async def get_products_by_category_slug(
 
 
 @router.get("/id/{id}", response_model=ProductResponse)
+@cache(expire=3600)
 async def get_product_by_id(
     id: int, product_service: product_dependency, current_admin: admin_dependency
 ) -> ProductResponse:
@@ -161,4 +164,73 @@ async def upload_product_image(
     """Upload and attach an image to an existing product."""
     image_url = await save_product_image(file)
     return product_service.update_product(id, update_dto=ProductUpdate(image_url=image_url))
+
+
+from app.schema.product_image_schema import ProductImageResponse
+from fastapi import Form
+
+@router.get("/{id}/images", response_model=List[ProductImageResponse])
+async def get_product_gallery_images(
+    id: int,
+    product_service: product_dependency,
+):
+    return product_service.get_gallery_images(id)
+
+
+@router.post("/{id}/images", response_model=ProductImageResponse, summary="Upload gallery image")
+async def upload_gallery_image(
+    id: int,
+    product_service: product_dependency,
+    current_admin: admin_dependency,
+    file: UploadFile = File(...),
+    is_primary: bool = Form(False),
+    alt_text: str = Form(None),
+):
+    image_url = await save_product_image(file)
+    return product_service.add_gallery_image(id, image_url, is_primary, alt_text)
+
+
+@router.delete("/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_gallery_image(
+    image_id: int,
+    product_service: product_dependency,
+    current_admin: admin_dependency,
+):
+    product_service.delete_gallery_image(image_id)
+
+
+from app.schema.product_variant_schema import ProductVariantCreate, ProductVariantUpdate, ProductVariantResponse
+
+@router.post("/{id}/variants", response_model=ProductVariantResponse, status_code=status.HTTP_201_CREATED)
+async def create_product_variant(
+    id: int,
+    variant_dto: ProductVariantCreate,
+    product_service: product_dependency,
+    current_admin: admin_dependency,
+):
+    return product_service.add_product_variant(id, variant_dto)
+
+@router.get("/{id}/variants", response_model=List[ProductVariantResponse])
+async def get_product_variants(
+    id: int,
+    product_service: product_dependency,
+):
+    return product_service.get_product_variants(id)
+
+@router.put("/variants/{variant_id}", response_model=ProductVariantResponse)
+async def update_product_variant(
+    variant_id: int,
+    variant_dto: ProductVariantUpdate,
+    product_service: product_dependency,
+    current_admin: admin_dependency,
+):
+    return product_service.update_product_variant(variant_id, variant_dto)
+
+@router.delete("/variants/{variant_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_product_variant(
+    variant_id: int,
+    product_service: product_dependency,
+    current_admin: admin_dependency,
+):
+    product_service.delete_product_variant(variant_id)
 

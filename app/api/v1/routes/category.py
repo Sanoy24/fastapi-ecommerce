@@ -7,6 +7,7 @@ from app.dependencies import (
 )
 from app.services.category_service import CategoryService
 from typing import Annotated, List
+from fastapi_cache.decorator import cache
 
 router = APIRouter(tags=["Category"])
 
@@ -39,6 +40,7 @@ async def create_category(
     summary="List categories",
     description="Returns all categories.",
 )
+@cache(expire=3600)
 async def get_all_categories(
     category_service: category_dependency,
 ):

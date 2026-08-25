@@ -76,3 +76,4 @@ class Order(Base):
     events: Mapped[List["OrderEvent"]] = relationship(
         "OrderEvent", back_populates="order", cascade="all, delete-orphan", order_by="OrderEvent.created_at.desc()"
     )
+    shipments = relationship("Shipment", back_populates="order")

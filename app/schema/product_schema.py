@@ -11,7 +11,11 @@ class ProductBase(BaseModel):
     stock_quantity: Optional[int] = Field(0, ge=0)
     image_url: Optional[HttpUrl] = None
     category_id: Optional[int] = None
-    is_active: Optional[bool] = True
+    brand_id: Optional[int] = None
+    status: Optional[str] = Field("draft", description="draft, active, or archived")
+    meta_title: Optional[str] = Field(None, max_length=70)
+    meta_description: Optional[str] = Field(None, max_length=160)
+    canonical_url: Optional[str] = Field(None, max_length=255)
 
 
 class ProductCreate(ProductBase):
@@ -42,7 +46,11 @@ class ProductUpdate(BaseModel):
     sku: Optional[str] = Field(None, max_length=100)
     image_url: Optional[HttpUrl] = None
     category_id: Optional[int] = None
-    is_active: Optional[bool] = None
+    brand_id: Optional[int] = None
+    status: Optional[str] = Field(None, description="draft, active, or archived")
+    meta_title: Optional[str] = Field(None, max_length=70)
+    meta_description: Optional[str] = Field(None, max_length=160)
+    canonical_url: Optional[str] = Field(None, max_length=255)
 
 
 class ProductResponse(ProductBase):

@@ -27,7 +27,16 @@ class Product(Base):
     sku: Mapped[Optional[str]] = mapped_column(String(100), unique=True)
     image_url: Mapped[Optional[str]] = mapped_column(String(500))
     category_id: Mapped[Optional[int]] = mapped_column(ForeignKey("categories.id"))
-    is_active: Mapped[bool] = mapped_column(default=True)
+    brand_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brands.id"))
+    
+    # Status
+    status: Mapped[str] = mapped_column(String(20), default="draft", server_default="draft")
+    
+    # SEO
+    meta_title: Mapped[Optional[str]] = mapped_column(String(70))
+    meta_description: Mapped[Optional[str]] = mapped_column(String(160))
+    canonical_url: Mapped[Optional[str]] = mapped_column(String(255))
+    
     created_at: Mapped[datetime.datetime] = mapped_column(
         default=func.current_timestamp()
     )
@@ -37,6 +46,13 @@ class Product(Base):
 
     # Relationships
     category: Mapped["Category"] = relationship("Category", back_populates="products")
+    brand: Mapped[Optional["Brand"]] = relationship("Brand")
+    images: Mapped[List["ProductImage"]] = relationship(
+        "ProductImage", back_populates="product", cascade="all, delete-orphan"
+    )
+    variants: Mapped[List["ProductVariant"]] = relationship(
+        "ProductVariant", back_populates="product", cascade="all, delete-orphan"
+    )
     cart_items: Mapped[List["CartItem"]] = relationship(
         "CartItem", back_populates="product", cascade="all, delete-orphan"
     )

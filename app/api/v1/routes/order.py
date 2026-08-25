@@ -7,8 +7,9 @@ from app.dependencies import get_current_user, get_order_service_dep, get_db
 from app.schema.order_schema import OrderCreateRequest, OrderResponse
 from app.utils.idempotency import check_idempotency, cache_idempotent_response
 from app.services.email_service import send_order_confirmation_email
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status, Request
 from typing import Annotated
+from app.core.limiter import limiter
 
 router = APIRouter(tags=["Orders"])
 
@@ -23,8 +24,10 @@ order_dependency = Annotated[OrderService, Depends(get_order_service_dep)]
     summary="Place a new order",
     response_model_exclude_none=True,
 )
+@limiter.limit("5/minute")
 async def create_order(
-    request: OrderCreateRequest,
+    request: Request,
+    order_create_request: OrderCreateRequest,
     current_user: Annotated[UserPublic, Depends(get_current_user)],
     order_service: order_dependency,
     background_tasks: BackgroundTasks,
@@ -36,8 +39,8 @@ async def create_order(
     """
     order = await order_service.place_order(
         user_id=current_user.id,
-        shipping_id=request.shipping_address_id,
-        billing_id=request.billing_address_id,
+        shipping_id=order_create_request.shipping_address_id,
+        billing_id=order_create_request.billing_address_id,
     )
     
     background_tasks.add_task(

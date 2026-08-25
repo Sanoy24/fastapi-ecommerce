@@ -1,6 +1,6 @@
 from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_review_service_dep
@@ -31,8 +31,8 @@ def create_review(
 def get_reviews_by_product(
     product_id: int,
     review_service: review_dependency,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
 ):
     """
     Get all reviews for a specific product.

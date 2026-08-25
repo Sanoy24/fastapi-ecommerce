@@ -31,7 +31,8 @@ dependencies = [
     "opentelemetry-exporter-otlp (>=1.38.0,<2.0.0)",
     "opentelemetry-instrumentation-sqlalchemy (>=0.59b0,<0.60)",
     "python-logging-loki (>=0.3.1,<0.4.0)",
-    "prometheus-fastapi-instrumentator (==7.0.0)"
+    "prometheus-fastapi-instrumentator (==7.0.0)",
+    "fastapi-cache2 (>=0.2.2,<0.3.0)"
 ]
 
 [tool.poetry]

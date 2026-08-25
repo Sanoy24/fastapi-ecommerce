@@ -53,9 +53,11 @@ class CartCrud:
         self.db.refresh(cart)
         return cart
 
-    def get_cart_item_by_product(self, cart_id: int, product_id: int):
+    def get_cart_item_by_product(self, cart_id: int, product_id: int, variant_id: Optional[int] = None):
         stmt = select(CartItem).where(
-            CartItem.cart_id == cart_id, CartItem.product_id == product_id
+            CartItem.cart_id == cart_id, 
+            CartItem.product_id == product_id,
+            CartItem.variant_id == variant_id
         )
 
         cart_item = self.db.scalar(stmt)
@@ -64,11 +66,15 @@ class CartCrud:
         return cart_item
 
     def update_existing_cart_item(
-        self, cart_id: int, product_id: int, quantity: int
+        self, cart_id: int, product_id: int, quantity: int, variant_id: Optional[int] = None
     ) -> CartItem:
         stmt = (
             update(CartItem)
-            .where(CartItem.cart_id == cart_id, CartItem.product_id == product_id)
+            .where(
+                CartItem.cart_id == cart_id, 
+                CartItem.product_id == product_id,
+                CartItem.variant_id == variant_id
+            )
             .values(quantity=CartItem.quantity + quantity)
             .returning(CartItem)
         )
@@ -78,9 +84,9 @@ class CartCrud:
         return updated
 
     def add_new_cart_item(
-        self, cart_id: int, product_id: int, quantity: int
+        self, cart_id: int, product_id: int, quantity: int, variant_id: Optional[int] = None
     ) -> CartItem:
-        new_item = CartItem(cart_id=cart_id, product_id=product_id, quantity=quantity)
+        new_item = CartItem(cart_id=cart_id, product_id=product_id, quantity=quantity, variant_id=variant_id)
         self.db.add(new_item)
         self.db.commit()
         self.db.refresh(new_item)

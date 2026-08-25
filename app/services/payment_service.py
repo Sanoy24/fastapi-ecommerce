@@ -7,6 +7,7 @@ from app.models.order import Order
 from app.models.payment import Payment
 from app.models.payment_event import PaymentEvent
 from app.models.inventory_reservation import InventoryReservation
+from app.models.inventory_transaction import InventoryTransaction
 from sqlalchemy.exc import IntegrityError
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -115,7 +116,19 @@ class PaymentService:
                 for item in order.order_items:
                     product = item.product
                     if product:
+                        old_qty = product.stock_quantity
                         product.stock_quantity -= item.quantity
+                        
+                        inv_tx = InventoryTransaction(
+                            product_id=product.id,
+                            order_id=order.id,
+                            transaction_type="deduction",
+                            quantity_change=-item.quantity,
+                            quantity_before=old_qty,
+                            quantity_after=product.stock_quantity,
+                            note=f"Stock deducted after successful payment for order {order.order_number}"
+                        )
+                        self.db.add(inv_tx)
                         
                 reservations = self.db.query(InventoryReservation).filter(
                     InventoryReservation.user_id == order.user_id

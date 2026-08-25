@@ -10,8 +10,11 @@ from app.models.product import Product
 from app.schema.admin_schema import BulkInventoryUpdateItem, BulkInventoryUpdateResponse
 from app.schema.common_schema import PaginatedResponse, PaginationLinks, PaginationMeta
 from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
+from app.schema.product_variant_schema import ProductVariantCreate, ProductVariantUpdate
 from app.utils.generate_slug import generate_sku, generate_slug
 from typing import List, Literal
+from app.models.product_image import ProductImage
+from app.models.product_variant import ProductVariant
 
 allowed_sort_order = Literal["asc", "desc"]
 allowed_sort_by = Literal["id", "price", "name", "created_at", "rating", "popularity"]
@@ -98,7 +101,7 @@ class ProductCrud:
         per_page = max(min(per_page, 100), 1)
 
         # Base query - only active products
-        stmt = select(Product).where(Product.is_active == True)
+        stmt = select(Product).where(Product.status == "active")
 
         # Search filter (case-insensitive full-text search)
         if search:
@@ -292,7 +295,7 @@ class ProductCrud:
         # Get products that start with the query (higher priority)
         stmt_prefix = (
             select(Product.name)
-            .where(Product.is_active == True)
+            .where(Product.status == "active")
             .where(Product.name.ilike(search_pattern))
             .distinct()
             .limit(limit)
@@ -308,7 +311,7 @@ class ProductCrud:
         remaining = limit - len(prefix_matches)
         stmt_contains = (
             select(Product.name)
-            .where(Product.is_active == True)
+            .where(Product.status == "active")
             .where(Product.name.ilike(contains_pattern))
             .where(~Product.name.ilike(search_pattern))  # Exclude prefix matches
             .distinct()
@@ -342,7 +345,7 @@ class ProductCrud:
     def total_active_products(self):
         active_products = (
             self.db.query(func.count(Product.id))
-            .filter(Product.is_active == True)
+            .filter(Product.status == "active")
             .scalar()
             or 0
         )
@@ -351,7 +354,7 @@ class ProductCrud:
     def total_inactive_products(self):
         inactive_products = (
             self.db.query(func.count(Product.id))
-            .filter(Product.is_active == False)
+            .filter(Product.status != "active")
             .scalar()
             or 0
         )
@@ -405,3 +408,59 @@ class ProductCrud:
         self.db.commit()
 
         return updated_count, failed_products
+
+    def add_product_image(self, product_id: int, url: str, is_primary: bool = False, alt_text: str = None) -> ProductImage:
+        image = ProductImage(product_id=product_id, url=url, is_primary=is_primary, alt_text=alt_text)
+        self.db.add(image)
+        self.db.commit()
+        self.db.refresh(image)
+        return image
+
+    def get_product_images(self, product_id: int) -> list[ProductImage]:
+        stmt = select(ProductImage).where(ProductImage.product_id == product_id).order_by(ProductImage.display_order)
+        return self.db.scalars(stmt).all()
+
+    def delete_product_image(self, image_id: int) -> bool:
+        stmt = delete(ProductImage).where(ProductImage.id == image_id)
+        result = self.db.execute(stmt)
+        if result.rowcount == 0:
+            return False
+        self.db.commit()
+        return True
+
+    def add_product_variant(self, product_id: int, variant_dto: ProductVariantCreate) -> ProductVariant:
+        variant = ProductVariant(product_id=product_id, **variant_dto.model_dump())
+        self.db.add(variant)
+        try:
+            self.db.commit()
+            self.db.refresh(variant)
+            return variant
+        except IntegrityError as e:
+            self.db.rollback()
+            raise ProductException("Variant sku already exists") from e
+
+    def get_product_variants(self, product_id: int) -> list[ProductVariant]:
+        stmt = select(ProductVariant).where(ProductVariant.product_id == product_id)
+        return self.db.scalars(stmt).all()
+
+    def update_product_variant(self, variant_id: int, variant_dto: ProductVariantUpdate) -> ProductVariant | None:
+        update_data = variant_dto.model_dump(exclude_unset=True)
+        if not update_data:
+            return self.db.get(ProductVariant, variant_id)
+
+        try:
+            stmt = update(ProductVariant).where(ProductVariant.id == variant_id).values(**update_data).returning(ProductVariant)
+            updated = self.db.execute(stmt).scalar_one_or_none()
+            self.db.commit()
+            return updated
+        except IntegrityError as e:
+            self.db.rollback()
+            raise ProductException("Variant update failed due to duplicate sku") from e
+
+    def delete_product_variant(self, variant_id: int) -> bool:
+        stmt = delete(ProductVariant).where(ProductVariant.id == variant_id)
+        result = self.db.execute(stmt)
+        if result.rowcount == 0:
+            return False
+        self.db.commit()
+        return True
