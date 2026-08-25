@@ -3,6 +3,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 from typing import Optional
 from app.db.database import Base
+from sqlalchemy import Index
 
 class OutboxEvent(Base):
     """
@@ -11,6 +12,9 @@ class OutboxEvent(Base):
     then asynchronously published to a message broker (or processed by a worker).
     """
     __tablename__ = "outbox_events"
+    __table_args__ = (
+        Index("ix_outbox_events_status", "status", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     topic: Mapped[str] = mapped_column(String(100), nullable=False, index=True)

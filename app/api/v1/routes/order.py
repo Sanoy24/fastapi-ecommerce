@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from app.schema.user_schema import UserPublic
 from app.services.order_service import OrderService
-from app.dependencies import get_current_user, get_order_service_dep, get_db
+from app.dependencies import get_current_user, get_order_service_dep, get_db, get_arq_pool
 from app.schema.order_schema import OrderCreateRequest, OrderResponse
 from app.utils.idempotency import check_idempotency, cache_idempotent_response
 from app.services.email_service import send_order_confirmation_email
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from arq.connections import ArqRedis
 from typing import Annotated
 from app.core.limiter import limiter
 
@@ -30,7 +31,7 @@ async def create_order(
     order_create_request: OrderCreateRequest,
     current_user: Annotated[UserPublic, Depends(get_current_user)],
     order_service: order_dependency,
-    background_tasks: BackgroundTasks,
+    arq_pool: Annotated[ArqRedis, Depends(get_arq_pool)],
     idempotency_key: str | None = Depends(check_idempotency),
 ):
     """
@@ -43,12 +44,13 @@ async def create_order(
         billing_id=order_create_request.billing_address_id,
     )
     
-    background_tasks.add_task(
-        send_order_confirmation_email,
-        to_address=current_user.email,
-        order_number=order.order_number,
-        total_amount=order.total_amount
-    )
+    if arq_pool:
+        await arq_pool.enqueue_job(
+            "send_order_confirmation_email_task",
+            current_user.email,
+            order.order_number,
+            order.total_amount
+        )
     
     if idempotency_key:
         from app.schema.order_schema import OrderResponse

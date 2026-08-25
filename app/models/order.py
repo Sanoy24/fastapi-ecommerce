@@ -4,13 +4,16 @@ from sqlalchemy import Enum as SQLEnum
 from typing import List, Optional
 from datetime import datetime
 from app.db.database import Base
-from sqlalchemy import JSON
+from sqlalchemy import JSON, Index
 
 
 class Order(Base):
     """Order entity representing a customer's purchase and fulfillment state."""
 
     __tablename__ = "orders"
+    __table_args__ = (
+        Index("ix_orders_user_id_status", "user_id", "status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(

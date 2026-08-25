@@ -1,9 +1,10 @@
 from typing import Annotated, Generator, Optional
 
 from elasticsearch import AsyncElasticsearch
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
+from arq.connections import ArqRedis
 
 from app.core.elastic_config import get_es_client
 from app.core.logger import *
@@ -179,3 +180,8 @@ async def get_optional_user(
 def get_coupon_service_dep(db: Session = Depends(get_db)):
     from app.services.coupon_service import CouponService
     return CouponService(db)
+
+def get_arq_pool(request: Request) -> ArqRedis:
+    """Get the ARQ Redis pool attached to the app state."""
+    return getattr(request.app.state, "arq_pool", None)
+

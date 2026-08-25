@@ -227,7 +227,7 @@ class UserService:
         user.password_hash = hash_password(data.new_password)
         self.db.commit()
 
-    async def forgot_password(self, email: str) -> None:
+    async def forgot_password(self, email: str, arq_pool=None) -> None:
         """
         Initiate the password-reset flow.
 
@@ -249,9 +249,12 @@ class UserService:
                 str(user.id),
             )
 
-        # Import here to avoid circular imports
-        from app.services.email_service import send_password_reset_email
-        await send_password_reset_email(to_address=email, reset_token=token)
+        if arq_pool:
+            await arq_pool.enqueue_job("send_password_reset_email_task", email, token)
+        else:
+            # Fallback for sync or non-ARQ execution
+            from app.services.email_service import send_password_reset_email
+            await send_password_reset_email(to_address=email, reset_token=token)
 
     async def reset_password(self, token: str, new_password: str) -> None:
         """

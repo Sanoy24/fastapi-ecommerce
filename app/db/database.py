@@ -13,7 +13,12 @@ naming_convention = {
     "pk": "pk_%(table_name)s"
 }
 
-engine = create_engine(settings.Database_url)
+engine = create_engine(
+    settings.Database_url,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True
+)
 
 
 class Base(DeclarativeBase):

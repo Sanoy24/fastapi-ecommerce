@@ -40,6 +40,19 @@ class AdminService:
         self.product_crud = ProductCrud(db=db)
         self.review_crud = ReviewCrud(db=db)
 
+    def log_action(self, admin_id: int, action: str, resource_type: str, resource_id: int, old_value=None, new_value=None):
+        from app.models.audit_log import AuditLog
+        audit_log = AuditLog(
+            admin_user_id=admin_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            old_value=old_value,
+            new_value=new_value
+        )
+        self.db.add(audit_log)
+        self.db.commit()
+
     # Analytics Methods
     def get_sales_analytics(self) -> SalesAnalytics:
         """Calculate sales analytics including revenue and order statistics"""
@@ -183,7 +196,7 @@ class AdminService:
             users=user_items, total=total, page=page, page_size=page_size
         )
 
-    def update_user_role(self, user_id: int, new_role: str) -> User:
+    def update_user_role(self, user_id: int, new_role: str, admin_id: int) -> User:
         """Update a user's role"""
         if new_role not in ["customer", "admin"]:
             raise HTTPException(
@@ -191,7 +204,12 @@ class AdminService:
                 detail="Invalid role. Must be 'customer' or 'admin'",
             )
 
+        old_user = self.user_crud.get_user(user_id)
+        old_role = old_user.role if old_user else None
+        
         user = self.user_crud.update_user_role(user_id, new_role)
+        
+        self.log_action(admin_id, "UPDATE_USER_ROLE", "user", user_id, old_value={"role": old_role}, new_value={"role": new_role})
         return user
 
     # Order Management Methods
@@ -224,15 +242,24 @@ class AdminService:
             orders=order_items, total=total, page=page, page_size=page_size
         )
 
-    def update_order_status(self, order_id: int, new_status: str) -> Order:
+    def update_order_status(self, order_id: int, new_status: str, admin_id: int) -> Order:
         """Update an order's status"""
-        return self.order_crud.update_order_status(order_id, new_status)
+        from app.crud.order import OrderCrud
+        order = self.db.get(Order, order_id)
+        old_status = order.status if order else None
+        
+        updated_order = self.order_crud.update_order_status(order_id, new_status)
+        
+        self.log_action(admin_id, "UPDATE_ORDER_STATUS", "order", order_id, old_value={"status": old_status}, new_value={"status": new_status})
+        return updated_order
 
     def mark_order_shipped(
-        self, order_id: int, shipped_at: Optional[datetime] = None
+        self, order_id: int, admin_id: int, shipped_at: Optional[datetime] = None
     ) -> Order:
         """Mark an order as shipped"""
-        return self.order_crud.mark_order_shipped(order_id, shipped_at)
+        updated_order = self.order_crud.mark_order_shipped(order_id, shipped_at)
+        self.log_action(admin_id, "MARK_ORDER_SHIPPED", "order", order_id, new_value={"status": "shipped"})
+        return updated_order
 
     # Review Moderation Methods
     def get_pending_reviews(
@@ -287,13 +314,16 @@ class AdminService:
             reviews=review_items, total=total, page=page, page_size=page_size
         )
 
-    def approve_review(self, review_id: int) -> Review:
+    def approve_review(self, review_id: int, admin_id: int) -> Review:
         """Approve a review"""
-        return self.review_crud.approve_review(review_id)
+        review = self.review_crud.approve_review(review_id)
+        self.log_action(admin_id, "APPROVE_REVIEW", "review", review_id, old_value={"is_approved": False}, new_value={"is_approved": True})
+        return review
 
-    def reject_review(self, review_id: int) -> None:
+    def reject_review(self, review_id: int, admin_id: int) -> None:
         """Reject/delete a review"""
-        return self.review_crud.reject_review(review_id)
+        self.review_crud.reject_review(review_id)
+        self.log_action(admin_id, "REJECT_REVIEW", "review", review_id)
 
     # Inventory Management Methods
     def get_low_stock_products(self, threshold: int = 10) -> List[InventoryAlert]:
@@ -312,12 +342,21 @@ class AdminService:
         ]
 
     def bulk_update_inventory(
-        self, updates: List[BulkInventoryUpdateItem]
+        self, updates: List[BulkInventoryUpdateItem], admin_id: int
     ) -> BulkInventoryUpdateResponse:
         """Bulk update product inventory"""
         updated_count, failed_products = self.product_crud.bulk_update_inventory(
             updates
         )
+        
+        if updated_count > 0:
+            self.log_action(
+                admin_id, 
+                "BULK_INVENTORY_UPDATE", 
+                "inventory", 
+                0, 
+                new_value={"updated_count": updated_count, "failed_count": len(failed_products)}
+            )
 
         return BulkInventoryUpdateResponse(
             updated_count=updated_count, failed_products=failed_products

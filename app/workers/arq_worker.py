@@ -40,14 +40,25 @@ async def process_outbox_events_task(ctx):
     logger.info("Finished outbox event processing")
 
 
-async def send_email_task(ctx, to_email: str, subject: str, body: str):
-    """
-    Task to send an email asynchronously.
-    """
-    logger.info(f"Sending email to {to_email} - {subject}")
-    # Simulate email sending delay
-    await asyncio.sleep(1)
-    logger.info(f"Email sent to {to_email}")
+from app.services.email_service import (
+    send_order_confirmation_email,
+    send_password_reset_email,
+    send_verification_email,
+)
+
+async def send_order_confirmation_email_task(ctx, to_address: str, order_number: str, total_amount: float):
+    logger.info(f"ARQ: Sending order confirmation to {to_address}")
+    await send_order_confirmation_email(to_address, order_number, total_amount)
+    return True
+
+async def send_password_reset_email_task(ctx, to_address: str, reset_token: str):
+    logger.info(f"ARQ: Sending password reset to {to_address}")
+    await send_password_reset_email(to_address, reset_token)
+    return True
+
+async def send_verification_email_task(ctx, to_address: str, verification_token: str):
+    logger.info(f"ARQ: Sending verification email to {to_address}")
+    await send_verification_email(to_address, verification_token)
     return True
 
 
@@ -75,7 +86,11 @@ except Exception:
     pass
 
 class WorkerSettings:
-    functions = [send_email_task]
+    functions = [
+        send_order_confirmation_email_task,
+        send_password_reset_email_task,
+        send_verification_email_task,
+    ]
     cron_jobs = [
         # In a real app we'd use arq cron to run process_outbox_events_task periodically
     ]

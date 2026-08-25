@@ -38,11 +38,18 @@ from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 
 
+from arq import create_pool
+from arq.connections import RedisSettings
+from app.workers.arq_worker import host, port, database
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await redis_client.connect()
     
     FastAPICache.init(RedisBackend(redis_client.client), prefix="fastapi-cache")
+    
+    # Initialize ARQ pool
+    app.state.arq_pool = await create_pool(RedisSettings(host=host, port=port, database=database))
     
     # Start the reservation cleanup background task
     cleanup_task = asyncio.create_task(cleanup_expired_reservations_loop())
@@ -65,6 +72,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await cleanup_task
     except asyncio.CancelledError:
         pass
+        
+    if hasattr(app.state, "arq_pool"):
+        await app.state.arq_pool.close()
         
     await redis_client.close()
     await close_es_client()
@@ -132,8 +142,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Idempotency-Key", "X-Refresh-Token"],
 )
 
 app.add_middleware(LoggingMiddleware)

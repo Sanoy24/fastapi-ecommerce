@@ -8,6 +8,7 @@ from sqlalchemy import (
     Text,
     func,
     select,
+    Index,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
 from typing import List, Optional
@@ -17,6 +18,9 @@ class Product(Base):
     """Product entity representing items in the catalog."""
 
     __tablename__ = "products"
+    __table_args__ = (
+        Index("ix_products_status_category", "status", "category_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)

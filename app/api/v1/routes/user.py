@@ -18,7 +18,9 @@ from app.dependencies import (
     get_current_user,
     require_admin,
     get_address_service_dep,
+    get_arq_pool,
 )
+from arq.connections import ArqRedis
 from typing import Annotated
 
 router = APIRouter(tags=["User"])
@@ -43,7 +45,7 @@ async def create_user(
     request: Request,
     create_user_data: CreateUserSchema,
     user_service: user_dependency,
-    background_tasks: BackgroundTasks,
+    arq_pool: Annotated[ArqRedis, Depends(get_arq_pool)],
 ) -> UserPublic:
     """
     Register a new user and return the public profile.
@@ -62,14 +64,11 @@ async def create_user(
     - HTTPException: If validation fails or a conflict occurs (e.g., duplicate email).
     """
     user = user_service.create_user(create_user_data)
-    # Send verification email in background
-    from app.services.email_service import send_verification_email
-    
-    if user.verification_token:
-        background_tasks.add_task(
-            send_verification_email,
-            to_address=user.email,
-            verification_token=user.verification_token
+    if user.verification_token and arq_pool:
+        await arq_pool.enqueue_job(
+            "send_verification_email_task",
+            user.email,
+            user.verification_token
         )
 
     return user
@@ -358,9 +357,10 @@ async def forgot_password(
     request: Request,
     data: ForgotPasswordSchema,
     user_service: user_dependency,
+    arq_pool: Annotated[ArqRedis, Depends(get_arq_pool)],
 ) -> dict:
     """Initiate the password-reset flow for the given email."""
-    await user_service.forgot_password(email=data.email)
+    await user_service.forgot_password(email=data.email, arq_pool=arq_pool)
     return {"message": "If that email exists, a reset link has been sent."}
 
 

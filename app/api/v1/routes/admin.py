@@ -219,7 +219,7 @@ async def update_user_role(
     current_admin: Annotated[UserPublic, Depends(require_admin)],
 ):
     """Update a user's role"""
-    user = admin_service.update_user_role(user_id=user_id, new_role=role_update.role)
+    user = admin_service.update_user_role(user_id=user_id, new_role=role_update.role, admin_id=current_admin.id)
     return UserPublic.model_validate(user)
 
 
@@ -255,7 +255,7 @@ def update_order_status(
     admin_service: Annotated[AdminService, Depends(get_admin_service)],
 ):
     """Update order status (Admin)"""
-    order = admin_service.update_order_status(order_id, payload.status)
+    order = admin_service.update_order_status(order_id, payload.status, admin_user.id)
 
     
     return OrderListItem(
@@ -280,13 +280,10 @@ def update_order_shipping(
     background_tasks: BackgroundTasks,
 ):
     """Update order shipping details and create shipment (Admin)"""
-    from app.crud.order import OrderCrud
-    
-    order_crud = OrderCrud(db)
-    order = order_crud.mark_order_shipped(
+    admin_service = AdminService(db)
+    order = admin_service.mark_order_shipped(
         order_id=order_id,
-        tracking_number=payload.tracking_number,
-        carrier=payload.shipping_carrier
+        admin_id=admin_user.id
     )
         
     # Dispatch shipped email asynchronously
@@ -436,7 +433,7 @@ async def approve_review(
     current_admin: Annotated[UserPublic, Depends(require_admin)],
 ):
     """Approve a review"""
-    review = admin_service.approve_review(review_id=review_id)
+    review = admin_service.approve_review(review_id=review_id, admin_id=current_admin.id)
     return {"message": "Review approved successfully", "review_id": review.id}
 
 
@@ -452,7 +449,7 @@ async def reject_review(
     current_admin: Annotated[UserPublic, Depends(require_admin)],
 ):
     """Reject/delete a review"""
-    admin_service.reject_review(review_id=review_id)
+    admin_service.reject_review(review_id=review_id, admin_id=current_admin.id)
     return None
 
 
@@ -484,4 +481,4 @@ async def bulk_update_inventory(
     current_admin: Annotated[UserPublic, Depends(require_admin)],
 ):
     """Bulk update product inventory"""
-    return admin_service.bulk_update_inventory(updates=update_request.updates)
+    return admin_service.bulk_update_inventory(updates=update_request.updates, admin_id=current_admin.id)

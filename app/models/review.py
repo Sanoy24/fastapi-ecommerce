@@ -3,12 +3,16 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional
 from datetime import datetime
 from app.db.database import Base
+from sqlalchemy import Index
 
 
 class Review(Base):
     """Product review entity with rating and optional comment."""
 
     __tablename__ = "reviews"
+    __table_args__ = (
+        Index("ix_reviews_product_id_approved", "product_id", "is_approved"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(

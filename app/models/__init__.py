@@ -28,6 +28,7 @@ from .brand import Brand
 from .product_image import ProductImage
 from .product_variant import ProductVariant
 from .outbox_event import OutboxEvent
+from .audit_log import AuditLog
 
 __all__ = [
     "User",
@@ -52,4 +53,5 @@ __all__ = [
     "ProductImage",
     "ProductVariant",
     "OutboxEvent",
+    "AuditLog",
 ]
