@@ -14,7 +14,7 @@ def _make_admin(db: Session) -> None:
         first_name="Admin",
         last_name="Cat",
         phone="0900000030",
-        role="admin",
+        is_verified=True, role="admin",
     )
     db.add(admin)
     db.commit()

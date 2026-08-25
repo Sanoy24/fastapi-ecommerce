@@ -13,13 +13,13 @@ class TestFulfillment:
         # 1. Setup admin and user
         admin = User(
             email="admin_full@test.com", password_hash=hash_password("AdminFull1"),
-            first_name="Admin", last_name="Full", phone="0900000072", role="admin"
+            first_name="Admin", last_name="Full", phone="0900000072", is_verified=True, role="admin"
         )
         db_session.add(admin)
         
         user = User(
             email="user_full@test.com", password_hash=hash_password("UserFull1"),
-            first_name="User", last_name="Full", phone="0900000071", role="customer"
+            first_name="User", last_name="Full", phone="0900000071", is_verified=True, role="customer"
         )
         db_session.add(user)
         db_session.commit()

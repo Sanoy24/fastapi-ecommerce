@@ -21,6 +21,8 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
+from app.middleware.request_logger import LoggingMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
@@ -101,6 +103,13 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Global middlewares (Order matters! The last added wraps the inner app first)
+# Request logger is outermost
+app.add_middleware(LoggingMiddleware)
+
+# Security Headers
+app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS — must be added before other middleware
 app.add_middleware(

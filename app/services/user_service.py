@@ -50,7 +50,11 @@ class UserService:
                 detail="User with this email already exists",
             )
         user = self.crud.create_user(user_create_data=user_create_data)
-        return UserPublic.model_validate(user)
+        import secrets
+        user.verification_token = secrets.token_urlsafe(32)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
 
     def authenticate_user(self, user_login_data: LoginSchema) -> User:
         """Return the User if credentials are valid, else None."""
@@ -69,6 +73,7 @@ class UserService:
             TokenSchema with both tokens and expiry information.
         Raises:
             HTTPException 401 if credentials are invalid.
+            HTTPException 403 if email is not verified.
         """
         user = self.authenticate_user(user_login_data=user_login_data)
         if not user:
@@ -76,6 +81,13 @@ class UserService:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
             )
+            
+        if not user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Email not verified",
+            )
+
         access_token = create_token(
             data={"sub": str(user.id)},
             expiration=timedelta(minutes=30),

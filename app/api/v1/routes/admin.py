@@ -251,17 +251,11 @@ def update_order_status(
     order_id: int,
     payload: OrderUpdateStatus,
     admin_user: Annotated[UserPublic, Depends(require_admin)],
-    db: Annotated[Session, Depends(get_db)],
+    admin_service: Annotated[AdminService, Depends(get_admin_service)],
 ):
     """Update order status (Admin)"""
-    from app.models.order import Order
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-        
-    order.status = payload.status
-    db.commit()
-    db.refresh(order)
+    order = admin_service.update_order_status(order_id, payload.status)
+
     
     return OrderListItem(
         id=order.id,

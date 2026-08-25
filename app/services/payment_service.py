@@ -5,6 +5,7 @@ from app.crud.payment import PaymentCrud
 from app.crud.order import OrderCrud
 from app.models.order import Order
 from app.models.payment_event import PaymentEvent
+from app.models.inventory_reservation import InventoryReservation
 from sqlalchemy.exc import IntegrityError
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -107,6 +108,19 @@ class PaymentService:
             if order:
                 order.payment_status = "success"
                 order.status = "paid"
+                
+                # Deduct stock and clear reservations
+                for item in order.order_items:
+                    product = item.product
+                    if product:
+                        product.stock_quantity -= item.quantity
+                        
+                reservations = self.db.query(InventoryReservation).filter(
+                    InventoryReservation.user_id == order.user_id
+                ).all()
+                for res in reservations:
+                    self.db.delete(res)
+
                 self.db.commit()
 
     def _handle_failed_payment(self, payment_intent):
@@ -119,4 +133,12 @@ class PaymentService:
             order = self.db.get(Order, payment.order_id)
             if order:
                 order.payment_status = "failed"
+                
+                # Clear reservations
+                reservations = self.db.query(InventoryReservation).filter(
+                    InventoryReservation.user_id == order.user_id
+                ).all()
+                for res in reservations:
+                    self.db.delete(res)
+
                 self.db.commit()

@@ -52,11 +52,13 @@ class OrderService:
                 detail=f"Only pending orders can be cancelled. Current status: '{order.status}'.",
             )
 
-        # Restore stock for each item
-        for item in order.order_items:
-            product = item.product
-            if product:
-                product.stock_quantity += item.quantity
+        # Clear reservations for this user
+        from app.models.inventory_reservation import InventoryReservation
+        reservations = self.db.query(InventoryReservation).filter(
+            InventoryReservation.user_id == order.user_id
+        ).all()
+        for res in reservations:
+            self.db.delete(res)
 
         from app.models.order_event import OrderEvent
         

@@ -13,7 +13,7 @@ def _make_admin(db: Session) -> None:
         first_name="Admin",
         last_name="Coupon",
         phone="0900000050",
-        role="admin",
+        is_verified=True, role="admin",
     )
     db.add(admin)
     db.commit()
@@ -25,7 +25,7 @@ def _make_user(db: Session) -> None:
         first_name="User",
         last_name="Coupon",
         phone="0900000051",
-        role="customer",
+        is_verified=True, role="customer",
     )
     db.add(user)
     db.commit()

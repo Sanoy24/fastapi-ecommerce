@@ -28,6 +28,7 @@ class UserPublic(BaseModel):
     last_name: Optional[str]
     phone: Optional[str]
     role: str
+    is_verified: bool
     addresses: list[AddressPublic] = []
     created_at: datetime
     updated_at: datetime

@@ -44,6 +44,20 @@ def client(db_session):
     
     app.dependency_overrides[get_db] = override_get_db
     
+    from app.services.user_service import UserService
+    from app.dependencies import get_user_service_dep
+    from app.core.redis import redis_client
+    
+    class TestUserService(UserService):
+        def create_user(self, user_create_data):
+            user = super().create_user(user_create_data)
+            user.is_verified = True
+            self.db.commit()
+            self.db.refresh(user)
+            return user
+            
+    app.dependency_overrides[get_user_service_dep] = lambda: TestUserService(db_session, redis_client)
+    
     # Disable rate limiter for testing
     from app.core.limiter import limiter
     limiter.enabled = False

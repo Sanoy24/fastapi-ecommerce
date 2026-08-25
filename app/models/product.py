@@ -1,3 +1,4 @@
+import datetime
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.database import Base
 from sqlalchemy import (
@@ -10,7 +11,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.hybrid import hybrid_property
 from typing import List, Optional
-import datetime
 
 
 class Product(Base):
@@ -48,6 +48,9 @@ class Product(Base):
     )
     wishlist_items: Mapped[List["Wishlist"]] = relationship(
         "Wishlist", back_populates="product", cascade="all, delete-orphan"
+    )
+    reservations: Mapped[List["InventoryReservation"]] = relationship(
+        "InventoryReservation", back_populates="product", cascade="all, delete-orphan"
     )
 
     @hybrid_property
@@ -96,3 +99,15 @@ class Product(Base):
     def in_stock(cls):
         """Check stock availability for SQL queries (class level)."""
         return cls.stock_quantity > 0
+
+    @hybrid_property
+    def available_stock(self) -> int:
+        """Calculate available stock (stock_quantity - active reservations)."""
+        if not self.reservations:
+            return self.stock_quantity
+        
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        active_reservations_qty = sum(
+            res.quantity for res in self.reservations if res.expires_at > now
+        )
+        return self.stock_quantity - active_reservations_qty

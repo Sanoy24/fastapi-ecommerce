@@ -1,6 +1,6 @@
 from app.schema.address_schema import AddressCreate, AddressUpdate, AddressPublic
 from app.services.address_service import AddressService
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, BackgroundTasks
 from app.services.user_service import UserService
 from app.schema.user_schema import (
     ChangePasswordSchema,
@@ -29,7 +29,8 @@ address_dependency = Annotated[
 
 
 from app.core.limiter import limiter
-from fastapi import Request
+from fastapi import Request, status
+from app.core.redis import redis_client
 
 @router.post(
     "/register",
@@ -42,6 +43,7 @@ async def create_user(
     request: Request,
     create_user_data: CreateUserSchema,
     user_service: user_dependency,
+    background_tasks: BackgroundTasks,
 ) -> UserPublic:
     """
     Register a new user and return the public profile.
@@ -60,7 +62,23 @@ async def create_user(
     - HTTPException: If validation fails or a conflict occurs (e.g., duplicate email).
     """
     user = user_service.create_user(create_user_data)
+    # Send verification email in background
+    from app.services.email_service import send_verification_email
+    
+    if user.verification_token:
+        background_tasks.add_task(
+            send_verification_email,
+            to_address=user.email,
+            verification_token=user.verification_token
+        )
+
     return user
+
+@router.get("/verify-email")
+def verify_email(token: str, user_service: user_dependency):
+    """Verify user's email address using token."""
+    user_service.verify_email(token)
+    return {"message": "Email verified successfully"}
 
 
 @router.post(
@@ -91,7 +109,31 @@ async def login(
     Raises:
     - HTTPException: If credentials are invalid (e.g., 401 Unauthorized).
     """
-    return user_service.login(user_login_data=login_data)
+    # Brute-force protection via Redis (if available)
+    lockout_key = f"lockout:{login_data.email}"
+    attempts_key = f"login_attempts:{login_data.email}"
+    
+    if redis_client._client:
+        is_locked = await redis_client.client.get(lockout_key)
+        if is_locked:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Account locked due to too many failed login attempts. Try again later."
+            )
+
+    try:
+        token = user_service.login(login_data)
+        if redis_client._client:
+            await redis_client.delete(attempts_key)
+        return token
+    except HTTPException as e:
+        if e.status_code == status.HTTP_401_UNAUTHORIZED and redis_client._client:
+            attempts = await redis_client.client.incr(attempts_key)
+            if attempts == 1:
+                await redis_client.client.expire(attempts_key, 900)
+            if attempts >= 5:
+                await redis_client.client.set(lockout_key, "1", ex=900)
+        raise e
 
 
 @router.get(

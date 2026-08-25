@@ -12,7 +12,7 @@ def _make_user(db: Session) -> None:
         first_name="User",
         last_name="Idem",
         phone="0900000061",
-        role="customer",
+        is_verified=True, role="customer",
     )
     db.add(user)
     db.commit()
@@ -31,7 +31,7 @@ class TestIdempotency:
         # Create admin and product first
         admin = User(
             email="admin_idem@test.com", password_hash=hash_password("AdminIdem1"),
-            first_name="Admin", last_name="Idem", phone="0900000062", role="admin"
+            first_name="Admin", last_name="Idem", phone="0900000062", is_verified=True, role="admin"
         )
         db_session.add(admin)
         db_session.commit()

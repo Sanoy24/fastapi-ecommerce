@@ -143,3 +143,28 @@ async def send_order_shipped_email(
         html_body=html_body,
         text_body=text_body,
     )
+
+async def send_verification_email(to_address: str, verification_token: str) -> None:
+    """Send an email verification link to the user."""
+    verify_url = f"{settings.FRONTEND_URL}/verify-email?token={verification_token}"
+
+    html_body = f"""
+    <html><body>
+    <h2>Welcome to FastAPI E-Commerce!</h2>
+    <p>Please verify your email address by clicking the link below:</p>
+    <p><a href="{verify_url}" style="background:#4F46E5;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">
+        Verify Email
+    </a></p>
+    <p>If you did not create an account, you can safely ignore this email.</p>
+    </body></html>
+    """
+    text_body = (
+        f"Welcome to FastAPI E-Commerce!\n\nVerify your email here: {verify_url}\n"
+        f"If you did not create an account, ignore this email."
+    )
+    await send_email(
+        to_address=to_address,
+        subject="Verify your email address",
+        html_body=html_body,
+        text_body=text_body,
+    )

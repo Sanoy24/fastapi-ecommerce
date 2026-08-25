@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from app.models.order_event import OrderEvent
 from app.models.product import Product
 from app.models.cart_item import CartItem
 from app.models.address import Address
+from app.models.inventory_reservation import InventoryReservation
 from app.core.exceptions import OrderException
 from app.models.user import User
 from app.utils.order_utils import generate_order_number, generate_trx_ref
@@ -41,10 +42,10 @@ class OrderCrud:
 
     def validate_stock(self, items: list[CartItem]):
         for item in items:
-            if item.product.stock_quantity < item.quantity:
+            if item.product.available_stock < item.quantity:
                 raise OrderException(
                     f"Not enough stock for {item.product.name}. "
-                    f"Available: {item.product.stock_quantity}"
+                    f"Available: {item.product.available_stock}"
                 )
 
     def create_order(self, user_id: int, shipping_id: int, billing_id: int):
@@ -94,7 +95,7 @@ class OrderCrud:
         self.db.add(order)
         self.db.flush()  # Get order.id
 
-        # Create order items + reduce stock
+        # Create order items + reserve stock
         for item in items:
             order_item = OrderItem(
                 order_id=order.id,
@@ -104,8 +105,14 @@ class OrderCrud:
             )
             self.db.add(order_item)
 
-            # Reduce stock
-            item.product.stock_quantity -= item.quantity
+            # Create inventory reservation instead of direct deduction
+            reservation = InventoryReservation(
+                product_id=item.product_id,
+                user_id=user_id,
+                quantity=item.quantity,
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15)
+            )
+            self.db.add(reservation)
 
         # Create initial order event
         event = OrderEvent(
@@ -243,14 +250,49 @@ class OrderCrud:
         )
         return total, orders
 
-    def update_order_status(self, order_id: int, new_status: str) -> Order:
+    def update_order_status(self, order_id: int, new_status: str, admin_id: Optional[int] = None) -> Order:
         order = self.db.query(Order).filter(Order.id == order_id).first()
         if not order:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
             )
 
-        order.status = new_status
+        valid_transitions = {
+            "pending": ["paid", "payment_failed", "cancelled"],
+            "paid": ["processing", "refund_pending", "cancelled"],
+            "processing": ["shipped", "refund_pending"],
+            "shipped": ["delivered", "return_requested"],
+            "delivered": ["return_requested"],
+            "return_requested": ["return_approved", "cancelled"],
+            "refund_pending": ["refunded"],
+            "payment_failed": ["cancelled"],
+            "cancelled": [],
+            "refunded": [],
+            "return_approved": []
+        }
+
+        allowed_next = valid_transitions.get(order.status, [])
+        if new_status not in allowed_next and new_status != order.status:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid transition from '{order.status}' to '{new_status}'. Allowed: {allowed_next}"
+            )
+
+        if order.status != new_status:
+            event = OrderEvent(
+                order_id=order.id,
+                from_status=order.status,
+                to_status=new_status,
+                note=f"Status updated to {new_status} by admin",
+                created_by=admin_id
+            )
+            self.db.add(event)
+            order.status = new_status
+            
+            if new_status == "delivered":
+                order.delivered_at = func.current_timestamp()
+            elif new_status == "cancelled":
+                order.cancelled_at = func.current_timestamp()
         self.db.commit()
         self.db.refresh(order)
         return order

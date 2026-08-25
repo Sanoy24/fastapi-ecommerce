@@ -226,13 +226,6 @@ class AdminService:
 
     def update_order_status(self, order_id: int, new_status: str) -> Order:
         """Update an order's status"""
-        valid_statuses = ["pending", "paid", "shipped", "delivered", "cancelled"]
-        if new_status not in valid_statuses:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}",
-            )
-
         return self.order_crud.update_order_status(order_id, new_status)
 
     def mark_order_shipped(

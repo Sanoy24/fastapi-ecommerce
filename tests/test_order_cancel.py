@@ -15,7 +15,7 @@ def _setup_admin_and_user(db: Session):
         first_name="Admin",
         last_name="Cancel",
         phone="0900000010",
-        role="admin",
+        is_verified=True, role="admin",
     )
     user = User(
         email="buyer_cancel@test.com",
@@ -23,7 +23,7 @@ def _setup_admin_and_user(db: Session):
         first_name="Buyer",
         last_name="Cancel",
         phone="0900000011",
-        role="customer",
+        is_verified=True, role="customer",
     )
     db.add_all([admin, user])
     db.commit()

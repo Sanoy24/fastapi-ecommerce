@@ -12,3 +12,4 @@ from .wishlist import Wishlist
 from .coupon import Coupon
 from .order_event import OrderEvent
 from .payment_event import PaymentEvent
+from .inventory_reservation import InventoryReservation
