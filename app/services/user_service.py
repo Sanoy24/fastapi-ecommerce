@@ -13,7 +13,10 @@ from app.schema.user_schema import (
     TokenSchema,
     UpdateUserSchema,
     UserPublic,
+    MFASetupResponse,
+    MFALoginChallenge,
 )
+from typing import Union
 from app.utils.security import (
     TokenError,
     create_refresh_token,
@@ -65,15 +68,9 @@ class UserService:
             return None
         return user
 
-    def login(self, user_login_data: LoginSchema) -> TokenSchema:
+    def login(self, user_login_data: LoginSchema) -> Union[TokenSchema, MFALoginChallenge]:
         """
-        Authenticate a user and issue access + refresh tokens.
-
-        Returns:
-            TokenSchema with both tokens and expiry information.
-        Raises:
-            HTTPException 401 if credentials are invalid.
-            HTTPException 403 if email is not verified.
+        Authenticate a user and issue access + refresh tokens or an MFA challenge.
         """
         user = self.authenticate_user(user_login_data=user_login_data)
         if not user:
@@ -87,6 +84,14 @@ class UserService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Email not verified",
             )
+
+        if user.mfa_enabled:
+            # Issue a short-lived challenge token
+            challenge_token = create_token(
+                data={"sub": str(user.id), "type": "mfa_challenge"},
+                expiration=timedelta(minutes=5),
+            )
+            return MFALoginChallenge(mfa_required=True, mfa_challenge_token=challenge_token)
 
         access_token = create_token(
             data={"sub": str(user.id)},
@@ -300,4 +305,64 @@ class UserService:
             )
         self.db.delete(user)
         self.db.commit()
+
+    def setup_mfa(self, user_id: int, email: str) -> MFASetupResponse:
+        from app.utils.totp import generate_totp_secret, generate_totp_uri
+        user = self.get_user_by_id(user_id)
+        secret = generate_totp_secret()
+        user.totp_secret = secret
+        self.db.commit()
+        uri = generate_totp_uri(secret, email)
+        return MFASetupResponse(secret=secret, uri=uri)
+
+    def enable_mfa(self, user_id: int, code: str) -> None:
+        from app.utils.totp import verify_totp
+        user = self.get_user_by_id(user_id)
+        if not user.totp_secret:
+            raise HTTPException(status_code=400, detail="MFA setup not initiated.")
+        if not verify_totp(user.totp_secret, code):
+            raise HTTPException(status_code=400, detail="Invalid TOTP code.")
+        user.mfa_enabled = True
+        self.db.commit()
+
+    def disable_mfa(self, user_id: int, code: str) -> None:
+        from app.utils.totp import verify_totp
+        user = self.get_user_by_id(user_id)
+        if not verify_totp(user.totp_secret, code):
+            raise HTTPException(status_code=400, detail="Invalid TOTP code.")
+        user.mfa_enabled = False
+        user.totp_secret = None
+        self.db.commit()
+
+    def verify_mfa_login(self, challenge_token: str, code: str) -> TokenSchema:
+        from app.utils.totp import verify_totp
+        from app.utils.security import decode_token
+        try:
+            payload = decode_token(challenge_token)
+        except TokenError:
+            raise HTTPException(status_code=401, detail="Invalid or expired challenge token.")
+        
+        if payload.get("type") != "mfa_challenge":
+            raise HTTPException(status_code=401, detail="Invalid token type.")
+            
+        user_id = payload.get("sub")
+        user = self.get_user_by_id(int(user_id))
+        
+        if not user.mfa_enabled or not user.totp_secret:
+            raise HTTPException(status_code=400, detail="MFA is not enabled for this user.")
+            
+        if not verify_totp(user.totp_secret, code):
+            raise HTTPException(status_code=401, detail="Invalid TOTP code.")
+            
+        access_token = create_token(
+            data={"sub": str(user.id)},
+            expiration=timedelta(minutes=30),
+        )
+        refresh_token = create_refresh_token(user_id=user.id)
+        return TokenSchema(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="Bearer",
+            expires_in=1800,
+        )
 

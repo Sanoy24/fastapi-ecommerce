@@ -36,6 +36,9 @@ class User(Base):
         DateTime, default=func.current_timestamp(), onupdate=func.now()
     )
 
+    totp_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
     # Relationships
     addresses: Mapped[List["Address"]] = relationship(
         "Address", back_populates="user", cascade="all, delete-orphan"

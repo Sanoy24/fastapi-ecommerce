@@ -409,7 +409,8 @@ class OrderCrud:
         valid_transitions = {
             "pending": ["paid", "payment_failed", "cancelled"],
             "paid": ["processing", "refund_pending", "cancelled"],
-            "processing": ["shipped", "refund_pending"],
+            "processing": ["packed", "shipped", "refund_pending"],
+            "packed": ["shipped", "refund_pending"],
             "shipped": ["delivered", "return_requested"],
             "delivered": ["return_requested"],
             "return_requested": ["return_approved", "cancelled"],

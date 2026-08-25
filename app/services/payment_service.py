@@ -11,6 +11,7 @@ from app.models.inventory_transaction import InventoryTransaction
 from sqlalchemy.exc import IntegrityError
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+stripe.max_network_retries = 3
 from sqlalchemy import func
 
 

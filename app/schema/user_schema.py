@@ -29,6 +29,7 @@ class UserPublic(BaseModel):
     phone: Optional[str]
     role: str
     is_verified: bool
+    mfa_enabled: bool = False
     addresses: list[AddressPublic] = []
     created_at: datetime
     updated_at: datetime
@@ -91,4 +92,18 @@ class ResetPasswordSchema(BaseModel):
 
 class DeleteUserResponseModel(BaseModel):
     detail: str
+
+
+class MFASetupResponse(BaseModel):
+    secret: str
+    uri: str
+
+
+class MFAVerifyRequest(BaseModel):
+    code: str
+
+
+class MFALoginChallenge(BaseModel):
+    mfa_required: bool
+    mfa_challenge_token: str
 

@@ -22,7 +22,7 @@ async def get_es_client() -> AsyncElasticsearch:
                     else "http://elasticsearch:9200"
                 )
             ],
-            request_timeout=30,
+            request_timeout=5,
             retry_on_timeout=True,
             max_retries=5,
             sniff_on_start=False,

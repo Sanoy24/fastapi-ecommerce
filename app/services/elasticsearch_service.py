@@ -94,12 +94,20 @@ class ElasticService:
             )
         except ConnectionError as e:
             logger.error(f"Elasticsearch connection failed during search: {e}")
-            raise HTTPException(
-                status_code=503, detail="Search temporarily unavailable"
-            )
+            return {
+                "total": {"value": 0, "relation": "eq"},
+                "took_ms": 0,
+                "results": [],
+                "error": "Search temporarily unavailable"
+            }
         except Exception as e:
             logger.exception("Unexpected error in search")
-            raise HTTPException(status_code=500, detail="Search failed")
+            return {
+                "total": {"value": 0, "relation": "eq"},
+                "took_ms": 0,
+                "results": [],
+                "error": "Search failed"
+            }
 
     async def suggest(
         self, text: str, size: int = 10, category: str | None = None

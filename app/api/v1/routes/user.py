@@ -11,7 +11,11 @@ from app.schema.user_schema import (
     TokenSchema,
     UserPublic,
     UpdateUserSchema,
+    UpdateUserSchema,
     DeleteUserResponseModel,
+    MFASetupResponse,
+    MFAVerifyRequest,
+    MFALoginChallenge,
 )
 from app.dependencies import (
     get_user_service_dep,
@@ -21,7 +25,7 @@ from app.dependencies import (
     get_arq_pool,
 )
 from arq.connections import ArqRedis
-from typing import Annotated
+from typing import Annotated, Union
 
 router = APIRouter(tags=["User"])
 user_dependency = Annotated[UserService, Depends(get_user_service_dep)]
@@ -82,16 +86,16 @@ def verify_email(token: str, user_service: user_dependency):
 
 @router.post(
     "/login",
-    response_model=TokenSchema,
+    response_model=Union[TokenSchema, MFALoginChallenge],
     summary="User login",
-    description="Authenticate user and return a JWT token.",
+    description="Authenticate user and return a JWT token or MFA challenge.",
 )
 @limiter.limit("10/minute")
 async def login(
     request: Request,
     login_data: LoginSchema,
     user_service: user_dependency,
-) -> TokenSchema:
+) -> Union[TokenSchema, MFALoginChallenge]:
     """
     Authenticate a user and return an access token.
 
@@ -377,3 +381,71 @@ async def reset_password(
     """Set a new password using a valid password-reset token."""
     await user_service.reset_password(token=data.token, new_password=data.new_password)
     return {"message": "Password has been reset successfully. Please log in."}
+
+
+# ─── MFA Endpoints ──────────────────────────────────────────────────────────
+
+@router.post(
+    "/mfa/setup",
+    response_model=MFASetupResponse,
+    summary="Setup MFA",
+    description="Generates a new TOTP secret and returns the URI for QR code setup.",
+)
+async def setup_mfa(
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    user_service: user_dependency,
+) -> MFASetupResponse:
+    if current_user.mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA is already enabled.")
+    return user_service.setup_mfa(current_user.id, current_user.email)
+
+
+@router.post(
+    "/mfa/enable",
+    status_code=status.HTTP_200_OK,
+    summary="Enable MFA",
+    description="Verifies the first TOTP code to fully enable MFA.",
+)
+async def enable_mfa(
+    data: MFAVerifyRequest,
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    user_service: user_dependency,
+):
+    if current_user.mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA is already enabled.")
+    user_service.enable_mfa(current_user.id, data.code)
+    return {"message": "MFA enabled successfully."}
+
+
+@router.post(
+    "/mfa/disable",
+    status_code=status.HTTP_200_OK,
+    summary="Disable MFA",
+    description="Disables MFA after verifying a valid code.",
+)
+async def disable_mfa(
+    data: MFAVerifyRequest,
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    user_service: user_dependency,
+):
+    if not current_user.mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA is not enabled.")
+    user_service.disable_mfa(current_user.id, data.code)
+    return {"message": "MFA disabled successfully."}
+
+
+@router.post(
+    "/mfa/verify",
+    response_model=TokenSchema,
+    summary="Verify MFA for Login",
+    description="Completes login by verifying the MFA code and challenge token.",
+)
+@limiter.limit("5/minute")
+async def verify_mfa_login(
+    request: Request,
+    data: MFAVerifyRequest,
+    challenge_token: str = Body(..., embed=True),
+    user_service: user_dependency = Depends(get_user_service_dep),
+) -> TokenSchema:
+    return user_service.verify_mfa_login(challenge_token, data.code)
+
