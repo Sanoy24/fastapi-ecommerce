@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.order_event import OrderEvent
 from app.models.product import Product
 from app.models.cart_item import CartItem
 from app.models.address import Address
@@ -47,22 +48,45 @@ class OrderCrud:
                 )
 
     def create_order(self, user_id: int, shipping_id: int, billing_id: int):
-        # Validate addresses
-        self.validate_address(user_id, shipping_id)
-        self.validate_address(user_id, billing_id)
+        shipping_address = self.validate_address(user_id, shipping_id)
+        billing_address = self.validate_address(user_id, billing_id)
 
         # Fetch cart items
         items = self.get_cart_items(user_id)
         self.validate_stock(items)
-
-        # Compute total
-        total_amount = sum(i.product.price * i.quantity for i in items)
+        
+        cart = items[0].cart
+        raw_subtotal = sum(i.product.price * i.quantity for i in items)
+        subtotal = float(raw_subtotal)
+        discount = 0.0
+        
+        if cart.coupon and cart.coupon.is_valid:
+            if cart.coupon.min_order_value is None or subtotal >= float(cart.coupon.min_order_value):
+                if cart.coupon.discount_type == "percentage":
+                    discount = subtotal * (float(cart.coupon.discount_value) / 100)
+                elif cart.coupon.discount_type == "fixed":
+                    discount = float(cart.coupon.discount_value)
+                    
+        total_amount = max(0.0, subtotal - discount)
+        
+        def _address_dict(addr):
+            return {
+                "street": addr.street,
+                "city": addr.city,
+                "country": addr.country,
+                "postal_code": addr.postal_code
+            }
 
         order = Order(
             user_id=user_id,
             shipping_address_id=shipping_id,
             billing_address_id=billing_id,
+            shipping_address_snapshot=_address_dict(shipping_address),
+            billing_address_snapshot=_address_dict(billing_address),
+            coupon_id=cart.coupon_id,
             order_number=generate_order_number(),
+            subtotal=subtotal,
+            discount_amount=discount,
             total_amount=total_amount,
             status="pending",
             tx_ref=generate_trx_ref(),
@@ -82,6 +106,16 @@ class OrderCrud:
 
             # Reduce stock
             item.product.stock_quantity -= item.quantity
+
+        # Create initial order event
+        event = OrderEvent(
+            order_id=order.id,
+            from_status=None,
+            to_status="pending",
+            note="Order placed",
+            created_by=user_id
+        )
+        self.db.add(event)
 
         # Clear cart
         for item in items:

@@ -10,3 +10,5 @@ from .product import Product
 from .review import Review
 from .wishlist import Wishlist
 from .coupon import Coupon
+from .order_event import OrderEvent
+from .payment_event import PaymentEvent

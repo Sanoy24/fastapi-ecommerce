@@ -4,6 +4,7 @@ from sqlalchemy import Enum as SQLEnum
 from typing import List, Optional
 from datetime import datetime
 from app.db.database import Base
+from sqlalchemy import JSON
 
 
 class Order(Base):
@@ -28,7 +29,9 @@ class Order(Base):
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     status: Mapped[str] = mapped_column(
         SQLEnum(
-            "pending", "paid", "processing", "shipped", "delivered", "cancelled", name="order_status"
+            "pending", "paid", "processing", "shipped", "delivered", "cancelled", 
+            "payment_failed", "refund_pending", "refunded", "return_requested", "return_approved",
+            name="order_status"
         ),
         default="pending",
     )
@@ -43,6 +46,17 @@ class Order(Base):
         SQLEnum("pending", "success", "failed", name="payment_status"),
         default="pending",
     )
+    
+    # New fields for order snapshots
+    discount_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0)
+    subtotal: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0)
+    tax_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0)
+    shipping_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0)
+    shipping_address_snapshot: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    billing_address_snapshot: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="orders")
@@ -58,4 +72,7 @@ class Order(Base):
     )
     payments: Mapped[List["Payment"]] = relationship(
         "Payment", back_populates="order", cascade="all, delete-orphan"
+    )
+    events: Mapped[List["OrderEvent"]] = relationship(
+        "OrderEvent", back_populates="order", cascade="all, delete-orphan", order_by="OrderEvent.created_at.desc()"
     )

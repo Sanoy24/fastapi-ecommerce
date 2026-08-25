@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy import func
 
 from app.core.exceptions import OrderException
 from app.crud.order import OrderCrud
@@ -57,8 +58,21 @@ class OrderService:
             if product:
                 product.stock_quantity += item.quantity
 
+        from app.models.order_event import OrderEvent
+        
+        event = OrderEvent(
+            order_id=order.id,
+            from_status=order.status,
+            to_status="cancelled",
+            note="Order cancelled by user",
+            created_by=user_id
+        )
+        self.db.add(event)
+
         order.status = "cancelled"
         order.payment_status = "failed"
+        order.cancelled_at = func.current_timestamp()
+        
         self.db.commit()
         self.db.refresh(order)
         return order

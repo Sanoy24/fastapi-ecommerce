@@ -4,6 +4,8 @@ from app.core.config import settings
 from app.crud.payment import PaymentCrud
 from app.crud.order import OrderCrud
 from app.models.order import Order
+from app.models.payment_event import PaymentEvent
+from sqlalchemy.exc import IntegrityError
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -60,11 +62,36 @@ class PaymentService:
         except stripe.error.SignatureVerificationError as e:
             raise HTTPException(status_code=400, detail="Invalid signature")
 
+        provider_event_id = event["id"]
+        
+        # Deduplication using database unique constraint
+        try:
+            payment_event = PaymentEvent(
+                event_type=event["type"],
+                provider_event_id=provider_event_id,
+                payload=event,
+                is_duplicate=False
+            )
+            self.db.add(payment_event)
+            self.db.commit()
+            self.db.refresh(payment_event)
+        except IntegrityError:
+            self.db.rollback()
+            return {"status": "success", "detail": "Duplicate event ignored"}
+
+        # Attempt to link event to payment if transaction_id is present
+        payment_intent = event["data"]["object"]
+        transaction_id = payment_intent.get("id")
+        payment = None
+        if transaction_id:
+            payment = self.payment_crud.get_payment_by_transaction_id(transaction_id)
+            if payment:
+                payment_event.payment_id = payment.id
+                self.db.commit()
+
         if event["type"] == "payment_intent.succeeded":
-            payment_intent = event["data"]["object"]
             self._handle_successful_payment(payment_intent)
         elif event["type"] == "payment_intent.payment_failed":
-            payment_intent = event["data"]["object"]
             self._handle_failed_payment(payment_intent)
 
         return {"status": "success"}

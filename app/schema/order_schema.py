@@ -32,6 +32,15 @@ class OrderResponse(BaseModel):
     shipping_carrier: Optional[str] = None
     tx_ref: str
     payment_status: str
+    
+    discount_amount: float
+    subtotal: float
+    tax_amount: float
+    shipping_amount: float
+    notes: Optional[str] = None
+    cancelled_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+    
     order_items: List[OrderItemResponse]
 
     model_config = {"from_attributes": True}

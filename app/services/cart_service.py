@@ -82,13 +82,19 @@ class CartService:
         raw_subtotal = sum(item.quantity * float(item.product.price) for item in cart.cart_items)
         subtotal = raw_subtotal
         
-        if cart.coupon_id and cart.coupon:
-            if cart.coupon.is_valid and (cart.coupon.min_order_value is None or raw_subtotal >= float(cart.coupon.min_order_value)):
-                if cart.coupon.discount_type == "percentage":
-                    discount = raw_subtotal * (float(cart.coupon.discount_value) / 100)
+        coupon = cart.coupon
+        if cart.coupon_id and not coupon:
+            from app.models.coupon import Coupon
+            from sqlalchemy import select
+            coupon = self.db.execute(select(Coupon).where(Coupon.id == cart.coupon_id)).scalar_one_or_none()
+
+        if coupon:
+            if coupon.is_valid and (coupon.min_order_value is None or raw_subtotal >= float(coupon.min_order_value)):
+                if coupon.discount_type == "percentage":
+                    discount = raw_subtotal * (float(coupon.discount_value) / 100)
                     subtotal -= discount
-                elif cart.coupon.discount_type == "fixed":
-                    subtotal -= float(cart.coupon.discount_value)
+                elif coupon.discount_type == "fixed":
+                    subtotal -= float(coupon.discount_value)
             
             if subtotal < 0:
                 subtotal = 0.0
@@ -143,7 +149,10 @@ class CartService:
         self.db.refresh(cart)
         return cart
 
-    def merge_carts(self, user_id: int, session_id: str):
+    def merge_carts(self, user_id: int, session_id: Optional[str]):
+        if not session_id:
+            return
+            
         user_cart = self.cart_crud.get_cart_by_user_id(user_id=user_id)
         anon_cart = self.cart_crud.get_cart_by_session_id(session_id=session_id)
 

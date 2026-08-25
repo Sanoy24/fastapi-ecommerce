@@ -72,11 +72,12 @@ class TestIdempotency:
         assert resp2.status_code == 200
         assert resp2.json()["order_number"] == order_number
         
-        # 4. Try without key, should fail because cart is empty
-        resp3 = client.post(
+        # 4. Without idempotency key (requires non-empty cart first)
+        client.post("/cart/items", json={"product_id": product_id, "quantity": 1}, headers={"Authorization": f"Bearer {token}"})
+        
+        resp4 = client.post(
             "/order",
             json={"shipping_address_id": address_id, "billing_address_id": address_id},
             headers={"Authorization": f"Bearer {token}"}
         )
-        assert resp3.status_code == 400
-        assert "Cart is empty" in resp3.json()["detail"]
+        assert resp4.status_code == 200

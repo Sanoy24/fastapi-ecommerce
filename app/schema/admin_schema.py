@@ -83,8 +83,7 @@ class UserListItem(BaseModel):
     total_orders: int = Field(..., description="Total orders by this user")
     total_spent: float = Field(..., description="Total amount spent by this user")
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class UserManagementResponse(BaseModel):
@@ -167,8 +166,7 @@ class ReviewModerationItem(BaseModel):
     created_at: datetime
     is_approved: bool
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class ReviewModerationResponse(BaseModel):
@@ -190,8 +188,7 @@ class InventoryAlert(BaseModel):
     stock_quantity: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class BulkInventoryUpdateItem(BaseModel):

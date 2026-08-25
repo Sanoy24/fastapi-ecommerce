@@ -81,6 +81,7 @@ def test_stripe_webhook_success(client: TestClient):
     # Mock Stripe Webhook construction
     with patch("stripe.Webhook.construct_event") as mock_construct:
         mock_construct.return_value = {
+            "id": "evt_test123",
             "type": "payment_intent.succeeded",
             "data": {
                 "object": {
