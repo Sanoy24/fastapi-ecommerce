@@ -444,8 +444,8 @@ async def disable_mfa(
 async def verify_mfa_login(
     request: Request,
     data: MFAVerifyRequest,
-    challenge_token: str = Body(..., embed=True),
     user_service: user_dependency,
+    challenge_token: str = Body(..., embed=True),
 ) -> TokenSchema:
     return user_service.verify_mfa_login(challenge_token, data.code)
 

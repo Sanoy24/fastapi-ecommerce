@@ -3,14 +3,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from typing import List
 
-from app.db.database import get_db
+from app.dependencies import get_db, require_admin
 from app.models.shipping import ShippingMethod, ShippingZone, ShippingRate
 from app.schema.shipping_schema import (
     ShippingMethodCreate, ShippingMethodResponse,
     ShippingZoneCreate, ShippingZoneResponse,
     ShippingRateCreate, ShippingRateResponse
 )
-from app.dependencies import get_current_admin_user
 from app.models.user import User
 from app.services.admin_service import AdminService
 
@@ -26,7 +25,7 @@ def get_shipping_methods(db: Session = Depends(get_db)):
 def create_shipping_method(
     data: ShippingMethodCreate,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin_user)
+    admin: User = Depends(require_admin)
 ):
     method = ShippingMethod(**data.model_dump())
     db.add(method)
@@ -39,7 +38,7 @@ def create_shipping_method(
 def create_shipping_zone(
     data: ShippingZoneCreate,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin_user)
+    admin: User = Depends(require_admin)
 ):
     zone = ShippingZone(**data.model_dump())
     db.add(zone)
@@ -52,7 +51,7 @@ def create_shipping_zone(
 def create_shipping_rate(
     data: ShippingRateCreate,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin_user)
+    admin: User = Depends(require_admin)
 ):
     rate = ShippingRate(**data.model_dump())
     db.add(rate)

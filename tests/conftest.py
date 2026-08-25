@@ -10,23 +10,21 @@ from app.db.database import Base
 from app.dependencies import get_db
 
 
-from testcontainers.postgres import PostgresContainer
+from sqlalchemy.pool import StaticPool
 
-postgres_container = PostgresContainer("postgres:15-alpine")
+# Create in-memory SQLite database for testing
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_postgres():
-    postgres_container.start()
-    yield
-    postgres_container.stop()
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @pytest.fixture(scope="function")
 def db_session():
     """Create a fresh database for each test."""
-    db_url = postgres_container.get_connection_url().replace("psycopg2", "psycopg")
-    engine = create_engine(db_url)
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
     Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
     try:
@@ -34,7 +32,6 @@ def db_session():
     finally:
         session.close()
         Base.metadata.drop_all(bind=engine)
-        engine.dispose()
 
 
 @pytest.fixture(scope="function")
