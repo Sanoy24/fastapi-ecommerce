@@ -3,6 +3,7 @@ from sqlalchemy import func
 
 from app.core.exceptions import OrderException
 from app.crud.order import OrderCrud
+from app.core.redis import redis_client
 
 
 class OrderService:
@@ -10,13 +11,25 @@ class OrderService:
         self.db = db
         self.crud = OrderCrud(db)
 
-    def place_order(self, user_id: int, shipping_id: int, billing_id: int):
+    async def place_order(self, user_id: int, shipping_id: int, billing_id: int):
+        lock_key = f"checkout_lock:{user_id}"
+        
+        # acquire lock for 10 seconds to prevent double submission
+        acquired = await redis_client.client.set(lock_key, "1", nx=True, ex=10)
+        if not acquired:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS, 
+                detail="Checkout already in progress. Please wait."
+            )
+            
         try:
             return self.crud.create_order(user_id, shipping_id, billing_id)
         except OrderException as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
             )
+        finally:
+            await redis_client.client.delete(lock_key)
 
     def list_orders(self, user_id: int):
         return self.crud.get_orders(user_id)

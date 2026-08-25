@@ -42,10 +42,19 @@ class OrderCrud:
 
     def validate_stock(self, items: list[CartItem]):
         for item in items:
-            if item.product.available_stock < item.quantity:
+            product = (
+                self.db.execute(
+                    select(Product).where(Product.id == item.product_id).with_for_update()
+                )
+                .scalars()
+                .first()
+            )
+            if not product:
+                raise OrderException(f"Product not found: {item.product_id}")
+            if product.available_stock < item.quantity:
                 raise OrderException(
-                    f"Not enough stock for {item.product.name}. "
-                    f"Available: {item.product.available_stock}"
+                    f"Not enough stock for {product.name}. "
+                    f"Available: {product.available_stock}"
                 )
 
     def create_order(self, user_id: int, shipping_id: int, billing_id: int):

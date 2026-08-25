@@ -26,6 +26,7 @@ from app.schema.admin_schema import (
 )
 from app.schema.user_schema import UserPublic
 from app.services.email_service import send_order_shipped_email
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from fastapi import BackgroundTasks, HTTPException
 
@@ -333,6 +334,89 @@ async def get_pending_reviews(
     """Get pending reviews for moderation"""
     return admin_service.get_pending_reviews(page=page, page_size=page_size)
 
+
+class RefundRequest(BaseModel):
+    amount: float
+    reason: str
+
+
+@router.post("/orders/{order_id}/refund", summary="Refund an order")
+def refund_order(
+    order_id: int,
+    request: RefundRequest,
+    db: Session = Depends(get_db),
+    admin: UserPublic = Depends(require_admin)
+):
+    """Admin endpoint to refund a payment for an order."""
+    from app.services.payment_service import PaymentService
+    payment_service = PaymentService(db)
+    return payment_service.refund_payment(
+        order_id=order_id,
+        user_id=admin.id,
+        amount=request.amount,
+        reason=request.reason,
+        is_admin=True
+    )
+
+class ReturnResolutionRequest(BaseModel):
+    status: str  # approved, rejected
+    resolution_note: str
+
+@router.get("/returns", summary="List all return requests")
+def list_return_requests(
+    db: Session = Depends(get_db),
+    admin: UserPublic = Depends(require_admin),
+    status: str = None
+):
+    """Admin endpoint to list return requests."""
+    from app.models.return_request import ReturnRequest
+    from sqlalchemy import select
+    
+    stmt = select(ReturnRequest)
+    if status:
+        stmt = stmt.where(ReturnRequest.status == status)
+    
+    returns = db.scalars(stmt).all()
+    return returns
+
+@router.patch("/returns/{return_id}", summary="Approve or reject a return")
+def resolve_return(
+    return_id: int,
+    request: ReturnResolutionRequest,
+    db: Session = Depends(get_db),
+    admin: UserPublic = Depends(require_admin)
+):
+    """Admin endpoint to resolve a return request."""
+    from app.models.return_request import ReturnRequest
+    from app.crud.order import OrderCrud
+    from sqlalchemy import func
+    
+    return_req = db.get(ReturnRequest, return_id)
+    if not return_req:
+        raise HTTPException(status_code=404, detail="Return request not found")
+        
+    if return_req.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Return already {return_req.status}")
+        
+    if request.status not in ["approved", "rejected"]:
+        raise HTTPException(status_code=400, detail="Status must be approved or rejected")
+        
+    return_req.status = request.status
+    return_req.resolution_note = request.resolution_note
+    return_req.resolved_at = func.current_timestamp()
+    
+    order_crud = OrderCrud(db)
+    new_order_status = "return_approved" if request.status == "approved" else "delivered"
+    
+    try:
+        order_crud.update_order_status(return_req.order_id, new_order_status, admin_id=admin.id)
+    except HTTPException as e:
+        # Ignore transition errors if the order is already in that state
+        pass
+        
+    db.commit()
+    db.refresh(return_req)
+    return return_req
 
 @router.get(
     "/reviews",

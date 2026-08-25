@@ -1,10 +1,13 @@
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from typing import List, Dict, Any
 from app.schema.user_schema import UserPublic
 from app.services.order_service import OrderService
-from app.dependencies import get_current_user, get_order_service_dep
+from app.dependencies import get_current_user, get_order_service_dep, get_db
 from app.schema.order_schema import OrderCreateRequest, OrderResponse
 from app.utils.idempotency import check_idempotency, cache_idempotent_response
 from app.services.email_service import send_order_confirmation_email
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status
 from typing import Annotated
 
 router = APIRouter(tags=["Orders"])
@@ -13,33 +16,43 @@ user_dependency = Annotated[UserPublic, Depends(get_current_user)]
 order_dependency = Annotated[OrderService, Depends(get_order_service_dep)]
 
 
-@router.post("", response_model=OrderResponse)
-async def place_order(
-    payload: OrderCreateRequest,
-    current_user: user_dependency,
+@router.post(
+    "",
+    response_model=OrderResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Place a new order",
+    response_model_exclude_none=True,
+)
+async def create_order(
+    request: OrderCreateRequest,
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
     order_service: order_dependency,
     background_tasks: BackgroundTasks,
     idempotency_key: str | None = Depends(check_idempotency),
 ):
-    response_data = order_service.place_order(
+    """
+    Place a new order from the items currently in the cart.
+    Requires valid shipping and billing address IDs.
+    """
+    order = await order_service.place_order(
         user_id=current_user.id,
-        shipping_id=payload.shipping_address_id,
-        billing_id=payload.billing_address_id,
+        shipping_id=request.shipping_address_id,
+        billing_id=request.billing_address_id,
     )
     
     background_tasks.add_task(
         send_order_confirmation_email,
         to_address=current_user.email,
-        order_number=response_data.order_number,
-        total_amount=response_data.total_amount
+        order_number=order.order_number,
+        total_amount=order.total_amount
     )
     
     if idempotency_key:
         from app.schema.order_schema import OrderResponse
-        order_response = OrderResponse.model_validate(response_data)
+        order_response = OrderResponse.model_validate(order)
         await cache_idempotent_response(idempotency_key, order_response.model_dump(mode="json"))
         
-    return response_data
+    return order
 
 
 @router.get("", response_model=list[OrderResponse])
@@ -73,4 +86,82 @@ def cancel_order(
 ):
     """Cancel a pending order and restore product stock."""
     return order_service.cancel_order(user_id=current_user.id, order_id=order_id)
+
+class RefundRequest(BaseModel):
+    amount: float
+    reason: str
+
+@router.post("/{order_id}/refund")
+def request_refund(
+    order_id: int,
+    request: RefundRequest,
+    db: Session = Depends(get_db),
+    current_user: UserPublic = Depends(get_current_user)
+):
+    """
+    Request a refund for an order.
+    """
+    from app.services.payment_service import PaymentService
+    payment_service = PaymentService(db)
+    return payment_service.refund_payment(
+        order_id=order_id,
+        user_id=current_user.id,
+        amount=request.amount,
+        reason=request.reason,
+        is_admin=False
+    )
+
+class ReturnItem(BaseModel):
+    order_item_id: int
+    quantity: int
+    reason: str
+
+class ReturnCreateRequest(BaseModel):
+    reason: str
+    items: List[ReturnItem]
+
+@router.post("/{order_id}/return")
+def request_return(
+    order_id: int,
+    request: ReturnCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserPublic = Depends(get_current_user)
+):
+    """
+    Request a return for a delivered order.
+    """
+    from app.crud.order import OrderCrud
+    from app.models.return_request import ReturnRequest
+    from app.core.exceptions import OrderException
+    from fastapi import HTTPException
+
+    order_crud = OrderCrud(db)
+    try:
+        order = order_crud.get_order_by_id(current_user.id, order_id)
+    except OrderException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    if order.status != "delivered":
+        raise HTTPException(status_code=400, detail="Only delivered orders can be returned")
+
+    # Basic validation that the items belong to the order
+    order_item_ids = {item.id for item in order.order_items}
+    for item in request.items:
+        if item.order_item_id not in order_item_ids:
+            raise HTTPException(status_code=400, detail=f"Item {item.order_item_id} not part of this order")
+
+    return_req = ReturnRequest(
+        order_id=order.id,
+        user_id=current_user.id,
+        reason=request.reason,
+        items=[item.model_dump() for item in request.items]
+    )
+    db.add(return_req)
+    
+    # Update order status
+    order_crud.update_order_status(order.id, "return_requested")
+    
+    db.commit()
+    db.refresh(return_req)
+    return return_req
 

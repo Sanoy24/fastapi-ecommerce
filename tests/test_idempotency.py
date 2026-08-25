@@ -60,7 +60,7 @@ class TestIdempotency:
             json={"shipping_address_id": address_id, "billing_address_id": address_id},
             headers={"Authorization": f"Bearer {token}", "Idempotency-Key": idem_key}
         )
-        assert resp1.status_code == 200
+        assert resp1.status_code == 201
         order_number = resp1.json()["order_number"]
         
         # 3. Retry place order with same key
@@ -80,4 +80,4 @@ class TestIdempotency:
             json={"shipping_address_id": address_id, "billing_address_id": address_id},
             headers={"Authorization": f"Bearer {token}"}
         )
-        assert resp4.status_code == 200
+        assert resp4.status_code == 201

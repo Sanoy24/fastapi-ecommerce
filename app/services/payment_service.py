@@ -4,11 +4,13 @@ from app.core.config import settings
 from app.crud.payment import PaymentCrud
 from app.crud.order import OrderCrud
 from app.models.order import Order
+from app.models.payment import Payment
 from app.models.payment_event import PaymentEvent
 from app.models.inventory_reservation import InventoryReservation
 from sqlalchemy.exc import IntegrityError
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+from sqlalchemy import func
 
 
 class PaymentService:
@@ -142,3 +144,36 @@ class PaymentService:
                     self.db.delete(res)
 
                 self.db.commit()
+
+    def refund_payment(self, order_id: int, user_id: int, amount: float, reason: str, is_admin: bool = False):
+        order = self.order_crud.get_order_by_id(user_id, order_id) if not is_admin else self.db.get(Order, order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        if order.payment_status != "success":
+            raise HTTPException(status_code=400, detail="Cannot refund unpaid order")
+
+        if order.status not in ["paid", "processing", "shipped", "delivered", "return_approved"]:
+            raise HTTPException(status_code=400, detail=f"Cannot refund order in status {order.status}")
+
+        payment = self.db.query(Payment).filter(Payment.order_id == order.id, Payment.status == "completed").first()
+        if not payment or not payment.transaction_id:
+            raise HTTPException(status_code=400, detail="No completed payment transaction found")
+
+        try:
+            refund = stripe.Refund.create(
+                payment_intent=payment.transaction_id,
+                amount=int(amount * 100),
+                reason="requested_by_customer" if reason == "duplicate" else "requested_by_customer"  # stripe reasons are restricted
+            )
+        except stripe.error.StripeError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        payment.refund_amount = amount
+        payment.refunded_at = func.current_timestamp()
+        
+        # update order status
+        self.order_crud.update_order_status(order.id, "refunded", admin_id=user_id if is_admin else None)
+        self.db.commit()
+        return refund
+

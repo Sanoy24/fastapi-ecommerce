@@ -66,7 +66,7 @@ def test_create_order(client: TestClient, db_session: Session):
         "billing_address_id": address_id
     }
     order_res = client.post("/order", json=order_payload, headers=headers)
-    assert order_res.status_code == 200
+    assert order_res.status_code == 201
     order_data = order_res.json()
     assert order_data["total_amount"] == 100.0
     assert order_data["status"] == "pending"

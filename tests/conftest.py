@@ -98,6 +98,16 @@ def client(db_session):
             return mock_store.get(key)
         async def setex(self, key, time, value):
             mock_store[key] = value
+        async def set(self, key, value, nx=False, ex=None):
+            if nx and key in mock_store:
+                return False
+            mock_store[key] = value
+            return True
+        async def delete(self, key):
+            if key in mock_store:
+                del mock_store[key]
+                return 1
+            return 0
             
     mock_redis_client_instance = MockRedisClientInstance()
     

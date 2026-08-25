@@ -32,11 +32,17 @@ from fastapi.responses import JSONResponse
 from app.core.redis import redis_client
 from app.middleware.request_logger import LoggingMiddleware
 from app.utils.es_utils import bulk_index_products, create_product_index
+from app.workers.reservation_cleanup import cleanup_expired_reservations_loop
+import asyncio
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await redis_client.connect()
+    
+    # Start the reservation cleanup background task
+    cleanup_task = asyncio.create_task(cleanup_expired_reservations_loop())
+    
     client = None
     try:
         client = await get_es_client()
@@ -50,6 +56,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             f"Failed to initialize Elasticsearch client or index products: {e}. App will continue without ES."
         )
     yield
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+        
     await redis_client.close()
     await close_es_client()
 
