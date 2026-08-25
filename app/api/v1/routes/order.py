@@ -35,7 +35,9 @@ async def place_order(
     )
     
     if idempotency_key:
-        await cache_idempotent_response(idempotency_key, response_data.model_dump())
+        from app.schema.order_schema import OrderResponse
+        order_response = OrderResponse.model_validate(response_data)
+        await cache_idempotent_response(idempotency_key, order_response.model_dump(mode="json"))
         
     return response_data
 

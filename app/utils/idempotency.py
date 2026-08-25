@@ -27,7 +27,7 @@ async def check_idempotency(
     key_hash = hashlib.sha256(base_string.encode()).hexdigest()
     redis_key = f"idempotency:{key_hash}"
     
-    cached_response = await redis_client.get(redis_key)
+    cached_response = await redis_client.client.get(redis_key)
     if cached_response:
         data = json.loads(cached_response)
         # We use a custom exception to short-circuit the route and return the cached response
@@ -54,4 +54,4 @@ async def cache_idempotent_response(redis_key: str, response_data: dict, status_
         "status_code": status_code,
         "content": response_data
     }
-    await redis_client.setex(redis_key, expire_secs, json.dumps(cache_data))
+    await redis_client.client.setex(redis_key, expire_secs, json.dumps(cache_data))

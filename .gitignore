@@ -210,3 +210,4 @@ __marimo__/
 *.db
 
 logs/
+frontend/node_modules

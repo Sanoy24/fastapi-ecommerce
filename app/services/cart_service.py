@@ -113,10 +113,11 @@ class CartService:
         return {
             "id": cart.id,
             "items": items,
-            "raw_subtotal": raw_subtotal,
-            "subtotal": subtotal,
             "total_items": total_items,
+            "subtotal": raw_subtotal,
             "coupon_code": cart.coupon.code if cart.coupon else None,
+            "discount_amount": raw_subtotal - subtotal,
+            "total_amount": subtotal,
         }
         
     def apply_coupon(self, cart: Cart, code: str) -> Cart:

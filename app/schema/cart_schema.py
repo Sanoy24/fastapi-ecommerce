@@ -26,6 +26,9 @@ class CartResponse(BaseModel):
     id: int
     items: List[CartItemResponse]
     total_items: int
-    subtotal: float  # ✅ FIXED: name must match service output
+    subtotal: float
+    coupon_code: str | None = None
+    discount_amount: float = 0.0
+    total_amount: float
 
     model_config = {"from_attributes": True}
