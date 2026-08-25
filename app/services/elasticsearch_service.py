@@ -36,7 +36,7 @@ class ElasticService:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="elasticseach unreachable",
             )
-        except Exception as e:
+        except Exception:
             logger.exception("Unexpected error during Elasticsearch ping")
             raise HTTPException(status_code=500, detail="Internal Elasticsearch error")
 
@@ -100,7 +100,7 @@ class ElasticService:
                 "results": [],
                 "error": "Search temporarily unavailable"
             }
-        except Exception as e:
+        except Exception:
             logger.exception("Unexpected error in search")
             return {
                 "total": {"value": 0, "relation": "eq"},

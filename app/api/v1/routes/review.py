@@ -1,7 +1,6 @@
 from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, status, Query
-from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_review_service_dep
 from app.schema.review_schema import ReviewCreate, ReviewResponse, ReviewUpdate

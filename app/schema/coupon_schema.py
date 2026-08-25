@@ -1,5 +1,5 @@
 import datetime
-from pydantic import BaseModel, Field, condecimal
+from pydantic import BaseModel, Field
 from typing import Optional
 
 

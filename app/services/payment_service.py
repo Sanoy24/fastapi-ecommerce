@@ -1,5 +1,5 @@
 import stripe
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from app.core.config import settings
 from app.crud.payment import PaymentCrud
 from app.crud.order import OrderCrud
@@ -62,9 +62,9 @@ class PaymentService:
             event = stripe.Webhook.construct_event(
                 payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
             )
-        except ValueError as e:
+        except ValueError:
             raise HTTPException(status_code=400, detail="Invalid payload")
-        except stripe.error.SignatureVerificationError as e:
+        except stripe.error.SignatureVerificationError:
             raise HTTPException(status_code=400, detail="Invalid signature")
 
         provider_event_id = event["id"]

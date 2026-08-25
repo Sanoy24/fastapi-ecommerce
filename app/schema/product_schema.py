@@ -1,7 +1,6 @@
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl
 from typing import Optional
 from datetime import datetime
-import re
 
 
 class ProductBase(BaseModel):

@@ -1,7 +1,6 @@
 # app/core/redis.py
 import json
-from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Optional
+from typing import Any, Optional
 
 import redis.asyncio as redis
 from app.core.logger import logger

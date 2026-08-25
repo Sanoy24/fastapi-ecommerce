@@ -10,7 +10,6 @@ from app.models.order_item import OrderItem
 from app.models.order_event import OrderEvent
 from app.models.product import Product
 from app.models.cart_item import CartItem
-from app.models.address import Address
 from app.models.coupon_usage import CouponUsage
 from app.models.inventory_reservation import InventoryReservation
 from app.models.inventory_transaction import InventoryTransaction
@@ -260,7 +259,7 @@ class OrderCrud:
             
         # Update order history
         event = OrderEvent(
-            order_id=order.id, status="pending", notes="Order placed successfully"
+            order_id=order.id, to_status="pending", note="Order placed successfully"
         )
         self.db.add(event)
 
@@ -464,6 +463,8 @@ class OrderCrud:
 
         order.status = "shipped"
         order.shipped_at = shipped_at or datetime.now()
+        order.tracking_number = tracking_number
+        order.shipping_carrier = carrier
         
         # Create Shipment record
         shipment = Shipment(

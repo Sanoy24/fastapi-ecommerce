@@ -4,7 +4,7 @@ from app.models.user import User
 from sqlalchemy.orm import Session
 from pydantic import EmailStr
 from typing import Optional
-from app.schema.user_schema import CreateUserSchema, UpdateUserSchema
+from app.schema.user_schema import CreateUserSchema
 from app.utils.security import hash_password
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException, status
@@ -28,7 +28,7 @@ class UserCrud:
             self.db.commit()
             self.db.refresh(db_user)
             return db_user
-        except SQLAlchemyError as e:
+        except SQLAlchemyError:
             self.db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

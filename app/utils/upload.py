@@ -5,7 +5,6 @@ Storage backend is controlled by the STORAGE_BACKEND setting:
   "local" → saves files under UPLOAD_DIR (default: ./uploads)
   "s3"    → uploads to S3_BUCKET using boto3 (install boto3 separately)
 """
-import os
 import uuid
 from pathlib import Path
 from typing import Optional

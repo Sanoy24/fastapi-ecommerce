@@ -4,7 +4,7 @@ from arq.connections import RedisSettings
 from app.core.logger import logger
 from app.db.database import SessionLocal
 from app.models.outbox_event import OutboxEvent
-from sqlalchemy import select, update
+from sqlalchemy import select, func
 
 async def process_outbox_events_task(ctx):
     """
@@ -40,23 +40,21 @@ async def process_outbox_events_task(ctx):
     logger.info("Finished outbox event processing")
 
 
-from app.services.email_service import (
-    send_order_confirmation_email,
-    send_password_reset_email,
-    send_verification_email,
-)
 
 async def send_order_confirmation_email_task(ctx, to_address: str, order_number: str, total_amount: float):
+    from app.services.email_service import send_order_confirmation_email
     logger.info(f"ARQ: Sending order confirmation to {to_address}")
     await send_order_confirmation_email(to_address, order_number, total_amount)
     return True
 
 async def send_password_reset_email_task(ctx, to_address: str, reset_token: str):
+    from app.services.email_service import send_password_reset_email
     logger.info(f"ARQ: Sending password reset to {to_address}")
     await send_password_reset_email(to_address, reset_token)
     return True
 
 async def send_verification_email_task(ctx, to_address: str, verification_token: str):
+    from app.services.email_service import send_verification_email
     logger.info(f"ARQ: Sending verification email to {to_address}")
     await send_verification_email(to_address, verification_token)
     return True

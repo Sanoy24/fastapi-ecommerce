@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, Boolean, DateTime, Enum as SQLEnum, JSON
+from sqlalchemy import String, Boolean, DateTime, Enum as SQLEnum, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from typing import Optional
 from datetime import datetime

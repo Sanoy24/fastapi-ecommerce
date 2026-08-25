@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from app.dependencies import get_cart_service_dep, get_optional_user
 from app.schema.user_schema import UserPublic
 from app.services.cart_service import CartService
-from app.schema.cart_schema import CartItemCreate, CartItemUpdate, CartResponse
+from app.schema.cart_schema import CartItemCreate, CartItemUpdate
 from app.utils.session import generate_session_id
 from app.core.logger import logger
 

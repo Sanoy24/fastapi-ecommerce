@@ -1,9 +1,7 @@
 from sqlalchemy.orm import Session
 from app.crud.address import AddressCrud
 from app.schema.address_schema import AddressCreate, AddressPublic, AddressUpdate
-from fastapi import HTTPException, status
-from fastapi.exceptions import RequestValidationError
-from app.models.address import Address
+from fastapi import HTTPException
 
 
 class AddressService:

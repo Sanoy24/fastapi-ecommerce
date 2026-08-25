@@ -1,12 +1,11 @@
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from typing import List
 from app.schema.user_schema import UserPublic
 from app.services.order_service import OrderService
 from app.dependencies import get_current_user, get_order_service_dep, get_db, get_arq_pool
 from app.schema.order_schema import OrderCreateRequest, OrderResponse
 from app.utils.idempotency import check_idempotency, cache_idempotent_response
-from app.services.email_service import send_order_confirmation_email
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from arq.connections import ArqRedis
 from typing import Annotated
@@ -139,7 +138,6 @@ def request_return(
     from app.crud.order import OrderCrud
     from app.models.return_request import ReturnRequest
     from app.core.exceptions import OrderException
-    from fastapi import HTTPException
 
     order_crud = OrderCrud(db)
     try:

@@ -2,7 +2,7 @@ from pydantic import HttpUrl
 from sqlalchemy.orm import Session
 from app.core.exceptions import CategoryCreationError, CategoryUpdateError
 from app.models.category import Category
-from app.schema.category_schema import CategoryPublic, CreateCategory, UpdateCategory
+from app.schema.category_schema import CreateCategory, UpdateCategory
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from app.core.logger import logger

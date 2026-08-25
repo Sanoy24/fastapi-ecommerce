@@ -27,10 +27,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
 from app.utils.idempotency import IdempotentResponseException
-from fastapi.responses import JSONResponse
 
 from app.core.redis import redis_client
-from app.middleware.request_logger import LoggingMiddleware
 from app.utils.es_utils import bulk_index_products, create_product_index
 from app.workers.reservation_cleanup import cleanup_expired_reservations_loop
 import asyncio
@@ -44,12 +42,21 @@ from app.workers.arq_worker import host, port, database
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    await redis_client.connect()
-    
-    FastAPICache.init(RedisBackend(redis_client.client), prefix="fastapi-cache")
-    
-    # Initialize ARQ pool
-    app.state.arq_pool = await create_pool(RedisSettings(host=host, port=port, database=database))
+    import sys
+    if "pytest" not in sys.modules:
+        await redis_client.connect()
+        FastAPICache.init(RedisBackend(redis_client.client), prefix="fastapi-cache")
+        # Initialize ARQ pool
+        app.state.arq_pool = await create_pool(RedisSettings(host=host, port=port, database=database))
+    else:
+        class MockArqPool:
+            async def enqueue_job(self, *args, **kwargs):
+                return None
+            async def close(self):
+                pass
+        app.state.arq_pool = MockArqPool()
+        from fastapi_cache.backends.inmemory import InMemoryBackend
+        FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     
     # Start the reservation cleanup background task
     cleanup_task = asyncio.create_task(cleanup_expired_reservations_loop())

@@ -4,8 +4,6 @@ from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 
 from app.models.wishlist import Wishlist
-from app.models.product import Product
-from app.models.user import User
 
 
 class WishlistCrud:

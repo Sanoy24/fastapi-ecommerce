@@ -5,13 +5,6 @@ from .cart import Cart
 from .category import Category
 from .order_item import OrderItem
 from .order import Order
-from .user import User
-from .address import Address
-from .cart_item import CartItem
-from .cart import Cart
-from .category import Category
-from .order_item import OrderItem
-from .order import Order
 from .payment import Payment
 from .product import Product
 from .review import Review

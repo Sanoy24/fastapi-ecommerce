@@ -1,14 +1,12 @@
 from typing import Optional
 
-from fastapi import HTTPException, status
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from app.core.exceptions import ProductException
 from app.crud.product import ProductCrud
 from app.models.cart import Cart
 from app.models.cart_item import CartItem
-from app.schema.cart_schema import CartItemCreate, CartItemUpdate
+from app.schema.cart_schema import CartItemUpdate
 from app.core.logger import logger
 
 

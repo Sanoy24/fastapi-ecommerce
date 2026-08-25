@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
-from typing import List
 
 from app.crud.wishlist import WishlistCrud
 from app.crud.product import ProductCrud

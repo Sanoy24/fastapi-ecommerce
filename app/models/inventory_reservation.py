@@ -1,6 +1,6 @@
 from sqlalchemy import Integer, ForeignKey, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime, timedelta
+from datetime import datetime
 from app.db.database import Base
 from sqlalchemy import Index
 

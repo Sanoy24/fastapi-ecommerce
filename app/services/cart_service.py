@@ -3,14 +3,10 @@ from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 from app.models.cart import Cart
 from app.models.cart_item import CartItem
-from app.models.product import Product
 from app.models.coupon import Coupon
 from app.schema.cart_schema import CartItemCreate, CartItemUpdate
-from app.schema.coupon_schema import CouponPublic
-import datetime
 from app.core.logger import logger
 from app.core.exceptions import ProductException
 from app.crud.product import ProductCrud
@@ -99,7 +95,6 @@ class CartService:
         coupon = cart.coupon
         if cart.coupon_id and not coupon:
             from app.models.coupon import Coupon
-            from sqlalchemy import select
             coupon = self.db.execute(select(Coupon).where(Coupon.id == cart.coupon_id)).scalar_one_or_none()
 
         if coupon:
@@ -116,7 +111,7 @@ class CartService:
         # Evaluate Promotions
         from app.models.promotion import Promotion
         active_promotions = self.db.scalars(
-            select(Promotion).where(Promotion.is_active == True)
+            select(Promotion).where(Promotion.is_active)
         ).all()
         
         applied_promotions = []
@@ -179,13 +174,13 @@ class CartService:
         from app.models.address import Address
         
         estimated_tax = 0.0
-        tax_rates = self.db.scalars(select(TaxRate).where(TaxRate.is_active == True)).all()
+        tax_rates = self.db.scalars(select(TaxRate).where(TaxRate.is_active)).all()
         
         # Try to find user's region
         region = None
         if cart.user_id:
             default_addr = self.db.execute(
-                select(Address).where(Address.user_id == cart.user_id, Address.is_default == True)
+                select(Address).where(Address.user_id == cart.user_id, Address.is_default)
             ).scalar_one_or_none()
             if default_addr:
                 region = default_addr.state or default_addr.country

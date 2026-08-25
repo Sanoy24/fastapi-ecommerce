@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.crud.brand import BrandCrud
-from app.schema.brand_schema import BrandCreate, BrandUpdate, BrandResponse
+from app.schema.brand_schema import BrandCreate, BrandUpdate
 from app.models.brand import Brand
 
 class BrandService:

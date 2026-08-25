@@ -6,7 +6,6 @@ from app.dependencies import require_admin, get_db
 from app.services.admin_service import AdminService
 from app.schema.admin_schema import (
     DashboardOverview,
-    SalesAnalytics,
     UserAnalytics,
     ProductAnalytics,
     ReviewAnalytics,
@@ -17,7 +16,6 @@ from app.schema.admin_schema import (
     OrderUpdateStatus,
     OrderUpdateShipping,
     ReviewModerationResponse,
-    ReviewModerationItem,
     InventoryAlert,
     BulkInventoryUpdateRequest,
     BulkInventoryUpdateResponse,
@@ -78,7 +76,7 @@ def get_sales_trends(
     """Get sales revenue and order counts over time (Admin only)."""
     from sqlalchemy import select, func
     from app.models.order import Order
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     
     db = admin_service.db
     cutoff = datetime.now() - timedelta(days=days)
@@ -283,7 +281,9 @@ def update_order_shipping(
     admin_service = AdminService(db)
     order = admin_service.mark_order_shipped(
         order_id=order_id,
-        admin_id=admin_user.id
+        admin_id=admin_user.id,
+        tracking_number=payload.tracking_number,
+        carrier=payload.shipping_carrier
     )
         
     # Dispatch shipped email asynchronously
@@ -399,7 +399,7 @@ def resolve_return(
     
     try:
         order_crud.update_order_status(return_req.order_id, new_order_status, admin_id=admin.id)
-    except HTTPException as e:
+    except HTTPException:
         # Ignore transition errors if the order is already in that state
         pass
         

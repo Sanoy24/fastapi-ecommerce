@@ -4,7 +4,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import (
     String,
     DateTime,
-    Integer,
     Boolean,
     func,
     Enum as SQLEnum,

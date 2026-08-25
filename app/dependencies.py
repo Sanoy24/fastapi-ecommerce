@@ -1,4 +1,4 @@
-from typing import Annotated, Generator, Optional
+from typing import Annotated, Generator
 
 from elasticsearch import AsyncElasticsearch
 from fastapi import Depends, HTTPException, status, Request
@@ -10,7 +10,6 @@ from app.core.elastic_config import get_es_client
 from app.core.logger import *
 from app.core.redis import RedisClient, redis_client
 from app.db.database import SessionLocal
-from app.models.user import User
 from app.schema.user_schema import UserPublic
 from app.services.address_service import AddressService
 from app.services.brand_service import BrandService
@@ -174,7 +173,6 @@ async def get_optional_user(
         return None
 
 def get_coupon_service_dep(db: Session = Depends(get_db)):
-    from app.services.coupon_service import CouponService
     return CouponService(db)
 
 def get_arq_pool(request: Request) -> ArqRedis:

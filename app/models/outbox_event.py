@@ -13,7 +13,7 @@ class OutboxEvent(Base):
     """
     __tablename__ = "outbox_events"
     __table_args__ = (
-        Index("ix_outbox_events_status", "status", "created_at"),
+        Index("ix_outbox_events_status_created", "status", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

@@ -49,6 +49,12 @@ class TestFulfillment:
         )
         order_id = resp.json()["id"]
         
+        # 3.5 Mark order as processing
+        from app.models.order import Order
+        order_db = db_session.get(Order, order_id)
+        order_db.status = "processing"
+        db_session.commit()
+        
         # 4. Admin updates shipping
         resp = client.put(
             f"/admin/orders/{order_id}/shipping",

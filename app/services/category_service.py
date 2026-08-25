@@ -1,5 +1,4 @@
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError  # Import for specific handling
 from app.core.exceptions import CategoryCreationError, CategoryUpdateError
 from app.crud.category import CategoryCrud
 from app.schema.category_schema import CreateCategory, UpdateCategory, CategoryPublic
@@ -77,7 +76,7 @@ class CategoryService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="invalid category update data",
             )
-        except Exception as e:
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="please try again.",

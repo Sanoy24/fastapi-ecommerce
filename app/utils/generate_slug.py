@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.models.product import Product
 from app.models.category import Category
-from app.core.logger import logger
 from typing import Literal, Set
 import uuid
 
@@ -13,7 +12,6 @@ def slugify(text: str, separator: str = "-") -> str:
     text = re.sub(r'[^\w\s' + separator + r']', '', text).strip()
     text = re.sub(r'[-\s]+', separator, text)
     return text
-import uuid
 
 SlugContext = Literal["product", "category"]
 

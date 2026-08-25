@@ -1,10 +1,9 @@
-from typing import List, Optional
+from typing import List
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.crud.review import ReviewCrud
-from app.models.review import Review
 from app.schema.review_schema import ReviewCreate, ReviewResponse, ReviewUpdate
 from app.schema.user_schema import UserPublic
 

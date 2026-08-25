@@ -1,6 +1,6 @@
 from app.schema.address_schema import AddressCreate, AddressUpdate, AddressPublic
 from app.services.address_service import AddressService
-from fastapi import APIRouter, Body, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Body, Depends, HTTPException
 from app.services.user_service import UserService
 from app.schema.user_schema import (
     ChangePasswordSchema,
@@ -11,7 +11,6 @@ from app.schema.user_schema import (
     TokenSchema,
     UserPublic,
     UpdateUserSchema,
-    UpdateUserSchema,
     DeleteUserResponseModel,
     MFASetupResponse,
     MFAVerifyRequest,
@@ -20,7 +19,6 @@ from app.schema.user_schema import (
 from app.dependencies import (
     get_user_service_dep,
     get_current_user,
-    require_admin,
     get_address_service_dep,
     get_arq_pool,
 )

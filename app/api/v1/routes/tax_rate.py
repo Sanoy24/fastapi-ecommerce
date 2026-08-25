@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update, delete
+from sqlalchemy import select
 from typing import List
 
-from sqlalchemy.orm import Session
 from app.dependencies import get_db, require_admin
 from app.models.tax_rate import TaxRate
 from app.schema.tax_schema import TaxRateCreate, TaxRateUpdate, TaxRateResponse

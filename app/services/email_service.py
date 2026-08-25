@@ -5,7 +5,6 @@ Uses aiosmtplib for async delivery. Set SMTP_USER and SMTP_PASSWORD in .env.
 If SMTP credentials are not configured, emails are logged to the console instead
 (useful for local development without a mail provider).
 """
-import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional

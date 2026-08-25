@@ -7,7 +7,7 @@ from app.core.exceptions import ProductException
 from app.core.logger import logger
 from app.models.category import Category
 from app.models.product import Product
-from app.schema.admin_schema import BulkInventoryUpdateItem, BulkInventoryUpdateResponse
+from app.schema.admin_schema import BulkInventoryUpdateItem
 from app.schema.common_schema import PaginatedResponse, PaginationLinks, PaginationMeta, CursorPaginatedResponse
 from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
 from app.schema.product_variant_schema import ProductVariantCreate, ProductVariantUpdate

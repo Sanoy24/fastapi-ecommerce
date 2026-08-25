@@ -1,12 +1,10 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, and_, or_
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, List
 from fastapi import HTTPException, status
 
 from app.models.user import User
 from app.models.order import Order
-from app.models.product import Product
 from app.models.review import Review
 from app.crud.order import OrderCrud
 from app.crud.user import UserCrud
@@ -244,7 +242,6 @@ class AdminService:
 
     def update_order_status(self, order_id: int, new_status: str, admin_id: int) -> Order:
         """Update an order's status"""
-        from app.crud.order import OrderCrud
         order = self.db.get(Order, order_id)
         old_status = order.status if order else None
         
@@ -254,10 +251,10 @@ class AdminService:
         return updated_order
 
     def mark_order_shipped(
-        self, order_id: int, admin_id: int, shipped_at: Optional[datetime] = None
+        self, order_id: int, admin_id: int, tracking_number: Optional[str] = None, carrier: Optional[str] = None, shipped_at: Optional[datetime] = None
     ) -> Order:
         """Mark an order as shipped"""
-        updated_order = self.order_crud.mark_order_shipped(order_id, shipped_at)
+        updated_order = self.order_crud.mark_order_shipped(order_id, tracking_number, carrier, shipped_at)
         self.log_action(admin_id, "MARK_ORDER_SHIPPED", "order", order_id, new_value={"status": "shipped"})
         return updated_order
 

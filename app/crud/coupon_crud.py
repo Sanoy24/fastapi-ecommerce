@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update, delete
+from sqlalchemy import select
 from app.models.coupon import Coupon
 from app.schema.coupon_schema import CouponCreate, CouponUpdate
 from typing import List, Optional

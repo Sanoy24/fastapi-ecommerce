@@ -1,12 +1,8 @@
 from fastapi import HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-from app.crud.cart_item import CartCrud
 import datetime
 import uuid
 
 from app.models.cart import Cart
-from app.models.cart_item import CartItem
 from app.models.product import Product
 
 
