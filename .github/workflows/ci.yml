@@ -76,5 +76,6 @@ jobs:
           pip install safety
           # We export poetry requirements to check them with safety
           pip install poetry
+          poetry self add poetry-plugin-export
           poetry export -f requirements.txt --output requirements.txt
           safety check -r requirements.txt
