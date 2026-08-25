@@ -204,9 +204,9 @@ class AdminService:
 
         old_user = self.user_crud.get_user(user_id)
         old_role = old_user.role if old_user else None
-        
+
         user = self.user_crud.update_user_role(user_id, new_role)
-        
+
         self.log_action(admin_id, "UPDATE_USER_ROLE", "user", user_id, old_value={"role": old_role}, new_value={"role": new_role})
         return user
 
@@ -244,9 +244,9 @@ class AdminService:
         """Update an order's status"""
         order = self.db.get(Order, order_id)
         old_status = order.status if order else None
-        
+
         updated_order = self.order_crud.update_order_status(order_id, new_status)
-        
+
         self.log_action(admin_id, "UPDATE_ORDER_STATUS", "order", order_id, old_value={"status": old_status}, new_value={"status": new_status})
         return updated_order
 
@@ -345,13 +345,13 @@ class AdminService:
         updated_count, failed_products = self.product_crud.bulk_update_inventory(
             updates
         )
-        
+
         if updated_count > 0:
             self.log_action(
-                admin_id, 
-                "BULK_INVENTORY_UPDATE", 
-                "inventory", 
-                0, 
+                admin_id,
+                "BULK_INVENTORY_UPDATE",
+                "inventory",
+                0,
                 new_value={"updated_count": updated_count, "failed_count": len(failed_products)}
             )
 

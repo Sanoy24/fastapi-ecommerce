@@ -1,5 +1,7 @@
 import stripe
 from fastapi import HTTPException
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from app.core.config import settings
 from app.crud.payment import PaymentCrud
 from app.crud.order import OrderCrud
@@ -8,11 +10,9 @@ from app.models.payment import Payment
 from app.models.payment_event import PaymentEvent
 from app.models.inventory_reservation import InventoryReservation
 from app.models.inventory_transaction import InventoryTransaction
-from sqlalchemy.exc import IntegrityError
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 stripe.max_network_retries = 3
-from sqlalchemy import func
 
 
 class PaymentService:
@@ -68,7 +68,7 @@ class PaymentService:
             raise HTTPException(status_code=400, detail="Invalid signature")
 
         provider_event_id = event["id"]
-        
+
         # Deduplication using database unique constraint
         try:
             payment_event = PaymentEvent(
@@ -112,14 +112,14 @@ class PaymentService:
             if order:
                 order.payment_status = "success"
                 order.status = "paid"
-                
+
                 # Deduct stock and clear reservations
                 for item in order.order_items:
                     product = item.product
                     if product:
                         old_qty = product.stock_quantity
                         product.stock_quantity -= item.quantity
-                        
+
                         inv_tx = InventoryTransaction(
                             product_id=product.id,
                             order_id=order.id,
@@ -130,7 +130,7 @@ class PaymentService:
                             note=f"Stock deducted after successful payment for order {order.order_number}"
                         )
                         self.db.add(inv_tx)
-                        
+
                 reservations = self.db.query(InventoryReservation).filter(
                     InventoryReservation.user_id == order.user_id
                 ).all()
@@ -149,7 +149,7 @@ class PaymentService:
             order = self.db.get(Order, payment.order_id)
             if order:
                 order.payment_status = "failed"
-                
+
                 # Clear reservations
                 reservations = self.db.query(InventoryReservation).filter(
                     InventoryReservation.user_id == order.user_id
@@ -185,7 +185,7 @@ class PaymentService:
 
         payment.refund_amount = amount
         payment.refunded_at = func.current_timestamp()
-        
+
         # update order status
         self.order_crud.update_order_status(order.id, "refunded", admin_id=user_id if is_admin else None)
         self.db.commit()

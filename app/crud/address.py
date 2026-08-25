@@ -28,7 +28,7 @@ class AddressCrud:
         Update default address for a user
         """
         self.db.query(Address).filter(
-            Address.user_id == user_id, Address.is_default == True
+            Address.user_id == user_id, Address.is_default
         ).update({"is_default": False})
         self.db.commit()
 

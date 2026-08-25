@@ -1,3 +1,4 @@
+import sys
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -57,15 +58,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.arq_pool = MockArqPool()
         from fastapi_cache.backends.inmemory import InMemoryBackend
         FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
-    
+
     # Start the reservation cleanup background task
     cleanup_task = asyncio.create_task(cleanup_expired_reservations_loop())
-    
+
     client = None
     try:
         client = await get_es_client()
         logger.info("Elasticsearch client initialized successfully")
-        
+
         if client is not None:
             await create_product_index(client)
             await bulk_index_products(client)
@@ -79,10 +80,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await cleanup_task
     except asyncio.CancelledError:
         pass
-        
+
     if hasattr(app.state, "arq_pool"):
         await app.state.arq_pool.close()
-        
+
     await redis_client.close()
     await close_es_client()
 
@@ -153,11 +154,8 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "Accept", "X-Idempotency-Key", "X-Refresh-Token"],
 )
 
-app.add_middleware(LoggingMiddleware)
-
 Instrumentator().instrument(app).expose(app)
 
-import sys
 if "pytest" not in sys.modules:
     # Configure OpenTelemetry
     resource = Resource(attributes={

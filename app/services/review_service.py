@@ -81,7 +81,7 @@ class ReviewService:
 
         from app.models.review_vote import ReviewVote
         from sqlalchemy import select
-        
+
         # Check if user already voted
         existing_vote = self.db.scalars(
             select(ReviewVote).where(
@@ -93,7 +93,7 @@ class ReviewService:
         if existing_vote:
             if existing_vote.is_helpful == is_helpful:
                 return {"detail": "Vote already recorded"}
-            
+
             # Switch vote
             if is_helpful:
                 review.helpful_votes += 1
@@ -101,7 +101,7 @@ class ReviewService:
             else:
                 review.helpful_votes -= 1
                 review.unhelpful_votes += 1
-            
+
             existing_vote.is_helpful = is_helpful
         else:
             # New vote
@@ -111,7 +111,7 @@ class ReviewService:
                 review.helpful_votes += 1
             else:
                 review.unhelpful_votes += 1
-                
+
         self.db.commit()
         return {"detail": "Vote recorded successfully"}
 
@@ -120,7 +120,7 @@ class ReviewService:
         review = self.crud.get_review(review_id=review_id)
         if not review:
             raise HTTPException(status_code=404, detail="Review not found")
-            
+
         review.report_count += 1
         self.db.commit()
         return {"detail": "Review reported successfully"}

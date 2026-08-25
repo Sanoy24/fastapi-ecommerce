@@ -32,7 +32,7 @@ class Order(Base):
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     status: Mapped[str] = mapped_column(
         SQLEnum(
-            "pending", "paid", "processing", "packed", "shipped", "delivered", "cancelled", 
+            "pending", "paid", "processing", "packed", "shipped", "delivered", "cancelled",
             "payment_failed", "refund_pending", "refunded", "return_requested", "return_approved",
             name="order_status"
         ),
@@ -49,7 +49,7 @@ class Order(Base):
         SQLEnum("pending", "success", "failed", name="payment_status"),
         default="pending",
     )
-    
+
     # New fields for order snapshots
     discount_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0)
     subtotal: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0)

@@ -13,7 +13,7 @@ class CouponService:
         existing = self.crud.get_coupon_by_code(coupon_data.code)
         if existing:
             raise HTTPException(status_code=400, detail="Coupon code already exists.")
-        
+
         coupon = self.crud.create_coupon(coupon_data)
         return CouponPublic.model_validate(coupon)
 
@@ -22,7 +22,7 @@ class CouponService:
         if not coupon:
             raise HTTPException(status_code=404, detail="Coupon not found")
         return CouponPublic.model_validate(coupon)
-        
+
     def get_coupon_by_code(self, code: str) -> CouponPublic:
         coupon = self.crud.get_coupon_by_code(code)
         if not coupon:
@@ -37,12 +37,12 @@ class CouponService:
         coupon = self.crud.get_coupon_by_id(coupon_id)
         if not coupon:
             raise HTTPException(status_code=404, detail="Coupon not found")
-            
+
         if coupon_data.code and coupon_data.code != coupon.code:
             existing = self.crud.get_coupon_by_code(coupon_data.code)
             if existing:
                 raise HTTPException(status_code=400, detail="Coupon code already exists.")
-                
+
         updated_coupon = self.crud.update_coupon(coupon, coupon_data)
         return CouponPublic.model_validate(updated_coupon)
 

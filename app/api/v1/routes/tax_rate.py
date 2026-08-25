@@ -26,12 +26,12 @@ def create_tax_rate(
     admin: User = Depends(require_admin)
 ):
     admin_service = AdminService(db=db)
-    
+
     tax_rate = TaxRate(**data.model_dump())
     db.add(tax_rate)
     db.commit()
     db.refresh(tax_rate)
-    
+
     # Log action
     admin_service.log_action(
         admin_id=admin.id,
@@ -40,7 +40,7 @@ def create_tax_rate(
         resource_id=tax_rate.id,
         new_value=data.model_dump()
     )
-    
+
     return tax_rate
 
 @router.put("/{id}", response_model=TaxRateResponse)
@@ -54,7 +54,7 @@ def update_tax_rate(
     tax_rate = db.get(TaxRate, id)
     if not tax_rate:
         raise HTTPException(status_code=404, detail="Tax rate not found")
-        
+
     old_value = {
         "name": tax_rate.name,
         "rate": float(tax_rate.rate),
@@ -63,14 +63,14 @@ def update_tax_rate(
         "region": tax_rate.region,
         "is_active": tax_rate.is_active
     }
-    
+
     update_data = data.model_dump(exclude_unset=True)
     for k, v in update_data.items():
         setattr(tax_rate, k, v)
-        
+
     db.commit()
     db.refresh(tax_rate)
-    
+
     admin_service.log_action(
         admin_id=admin.id,
         action="UPDATE_TAX_RATE",
@@ -79,7 +79,7 @@ def update_tax_rate(
         old_value=old_value,
         new_value=update_data
     )
-    
+
     return tax_rate
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -92,10 +92,10 @@ def delete_tax_rate(
     tax_rate = db.get(TaxRate, id)
     if not tax_rate:
         raise HTTPException(status_code=404, detail="Tax rate not found")
-        
+
     db.delete(tax_rate)
     db.commit()
-    
+
     admin_service.log_action(
         admin_id=admin.id,
         action="DELETE_TAX_RATE",

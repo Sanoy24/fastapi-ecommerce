@@ -35,7 +35,7 @@ class CouponCrud:
     def delete_coupon(self, coupon: Coupon) -> None:
         self.db.delete(coupon)
         self.db.commit()
-        
+
     def increment_usage(self, coupon: Coupon) -> None:
         coupon.used_count += 1
         self.db.commit()

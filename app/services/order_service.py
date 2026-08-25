@@ -13,15 +13,15 @@ class OrderService:
 
     async def place_order(self, user_id: int, shipping_id: int, billing_id: int, shipping_method_id: int | None = None):
         lock_key = f"checkout_lock:{user_id}"
-        
+
         # acquire lock for 10 seconds to prevent double submission
         acquired = await redis_client.client.set(lock_key, "1", nx=True, ex=10)
         if not acquired:
             raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS, 
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Checkout already in progress. Please wait."
             )
-            
+
         try:
             return self.crud.create_order(user_id, shipping_id, billing_id, shipping_method_id)
         except OrderException as e:
@@ -74,7 +74,7 @@ class OrderService:
             self.db.delete(res)
 
         from app.models.order_event import OrderEvent
-        
+
         event = OrderEvent(
             order_id=order.id,
             from_status=order.status,
@@ -87,7 +87,7 @@ class OrderService:
         order.status = "cancelled"
         order.payment_status = "failed"
         order.cancelled_at = func.current_timestamp()
-        
+
         self.db.commit()
         self.db.refresh(order)
         return order

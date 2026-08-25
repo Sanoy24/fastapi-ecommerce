@@ -77,10 +77,10 @@ def get_sales_trends(
     from sqlalchemy import select, func
     from app.models.order import Order
     from datetime import timedelta
-    
+
     db = admin_service.db
     cutoff = datetime.now() - timedelta(days=days)
-    
+
     # SQLite friendly date truncation
     stmt = (
         select(
@@ -93,7 +93,7 @@ def get_sales_trends(
         .group_by(func.strftime('%Y-%m-%d', Order.order_date))
         .order_by('date')
     )
-    
+
     results = db.execute(stmt).all()
     return [{"date": r.date, "revenue": r.revenue or 0.0, "orders_count": r.orders_count} for r in results]
 
@@ -113,7 +113,7 @@ def get_top_products(
     from app.models.order_item import OrderItem
     from app.models.product import Product
     from app.models.order import Order
-    
+
     db = admin_service.db
     stmt = (
         select(
@@ -129,7 +129,7 @@ def get_top_products(
         .order_by(func.sum(OrderItem.quantity).desc())
         .limit(limit)
     )
-    
+
     results = db.execute(stmt).all()
     return [{
         "product_id": r.product_id,
@@ -255,7 +255,7 @@ def update_order_status(
     """Update order status (Admin)"""
     order = admin_service.update_order_status(order_id, payload.status, admin_user.id)
 
-    
+
     return OrderListItem(
         id=order.id,
         order_number=order.order_number,
@@ -285,7 +285,7 @@ def update_order_shipping(
         tracking_number=payload.tracking_number,
         carrier=payload.shipping_carrier
     )
-        
+
     # Dispatch shipped email asynchronously
     background_tasks.add_task(
         send_order_shipped_email,
@@ -294,7 +294,7 @@ def update_order_shipping(
         tracking_number=payload.tracking_number,
         carrier=payload.shipping_carrier,
     )
-    
+
     return OrderListItem(
         id=order.id,
         order_number=order.order_number,
@@ -360,11 +360,11 @@ def list_return_requests(
     """Admin endpoint to list return requests."""
     from app.models.return_request import ReturnRequest
     from sqlalchemy import select
-    
+
     stmt = select(ReturnRequest)
     if status:
         stmt = stmt.where(ReturnRequest.status == status)
-    
+
     returns = db.scalars(stmt).all()
     return returns
 
@@ -379,30 +379,30 @@ def resolve_return(
     from app.models.return_request import ReturnRequest
     from app.crud.order import OrderCrud
     from sqlalchemy import func
-    
+
     return_req = db.get(ReturnRequest, return_id)
     if not return_req:
         raise HTTPException(status_code=404, detail="Return request not found")
-        
+
     if return_req.status != "pending":
         raise HTTPException(status_code=400, detail=f"Return already {return_req.status}")
-        
+
     if request.status not in ["approved", "rejected"]:
         raise HTTPException(status_code=400, detail="Status must be approved or rejected")
-        
+
     return_req.status = request.status
     return_req.resolution_note = request.resolution_note
     return_req.resolved_at = func.current_timestamp()
-    
+
     order_crud = OrderCrud(db)
     new_order_status = "return_approved" if request.status == "approved" else "delivered"
-    
+
     try:
         order_crud.update_order_status(return_req.order_id, new_order_status, admin_id=admin.id)
     except HTTPException:
         # Ignore transition errors if the order is already in that state
         pass
-        
+
     db.commit()
     db.refresh(return_req)
     return return_req

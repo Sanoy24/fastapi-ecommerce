@@ -16,7 +16,6 @@ from app.core.logger import logger
 
 try:
     import boto3  # type: ignore
-    from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
     _BOTO3_AVAILABLE = True
 except ImportError:
     _BOTO3_AVAILABLE = False

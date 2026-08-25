@@ -11,9 +11,9 @@ async def process_outbox_events_task(ctx):
     Periodic task to process pending outbox events.
     """
     logger.info("Starting outbox event processing")
-    
-    # In a real async app we'd use async sqlalchemy. 
-    # Since this app uses sync sqlalchemy, we must use a threadpool or run it in a sync way, 
+
+    # In a real async app we'd use async sqlalchemy.
+    # Since this app uses sync sqlalchemy, we must use a threadpool or run it in a sync way,
     # but ARQ functions are async.
     # For now, we'll run it directly as this worker will block for DB operations.
     def _process():
@@ -21,7 +21,7 @@ async def process_outbox_events_task(ctx):
             events = db.execute(
                 select(OutboxEvent).where(OutboxEvent.status == "pending").limit(50).with_for_update(skip_locked=True)
             ).scalars().all()
-            
+
             for event in events:
                 try:
                     logger.info(f"Publishing event {event.id} - topic: {event.topic}")
@@ -65,14 +65,14 @@ async def detect_abandoned_carts_task(ctx):
     Find carts with items where last_activity_at < NOW() - 24h and user has email, enqueue recovery emails.
     """
     logger.info("Starting abandoned cart detection")
-    
+
     def _process():
         from app.models.cart import Cart
         from app.models.user import User
         import datetime
-        
+
         cutoff = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(hours=24)
-        
+
         with SessionLocal() as db:
             # find carts with activity older than 24h, having items, and a user with email
             carts = db.execute(
@@ -81,16 +81,16 @@ async def detect_abandoned_carts_task(ctx):
                 .where(Cart.last_activity_at < cutoff)
                 .where(Cart.user_id.isnot(None))
                 # Note: In a production app, we would add a flag to track if we already sent the email
-                .limit(100) 
+                .limit(100)
             ).scalars().all()
-            
+
             for cart in carts:
                 if cart.cart_items and cart.user:
                     logger.info(f"Abandoned cart detected for user {cart.user.email}")
                     # Simulate enqueueing email
                     # await ctx['redis'].enqueue_job('send_abandoned_cart_email_task', cart.user.email, cart.id)
                     pass
-                    
+
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _process)
     logger.info("Finished abandoned cart detection")
@@ -124,7 +124,7 @@ class WorkerSettings:
         send_verification_email_task,
         detect_abandoned_carts_task,
     ]
-    
+
     from arq.cron import cron
     cron_jobs = [
         cron(detect_abandoned_carts_task, hour={0, 12}, minute=0) # run twice a day

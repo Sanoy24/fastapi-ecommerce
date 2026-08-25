@@ -22,7 +22,7 @@ class AuditLogResponse(BaseModel):
     new_value: Optional[Any]
     ip_address: Optional[str]
     created_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 class AuditLogPaginatedResponse(BaseModel):
@@ -47,21 +47,21 @@ def get_audit_logs(
     action: Optional[str] = Query(None, description="Filter by action"),
 ):
     stmt = select(AuditLog)
-    
+
     if admin_user_id:
         stmt = stmt.where(AuditLog.admin_user_id == admin_user_id)
     if resource_type:
         stmt = stmt.where(AuditLog.resource_type == resource_type)
     if action:
         stmt = stmt.where(AuditLog.action == action)
-        
+
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-    
+
     offset = (page - 1) * page_size
     stmt = stmt.order_by(AuditLog.created_at.desc()).offset(offset).limit(page_size)
-    
+
     logs = db.scalars(stmt).all()
-    
+
     return AuditLogPaginatedResponse(
         items=[AuditLogResponse.model_validate(log) for log in logs],
         total=total or 0,

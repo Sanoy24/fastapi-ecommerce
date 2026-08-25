@@ -15,7 +15,7 @@ class BrandCrud:
             brand_data = create_dto.model_dump()
             slug = generate_slug(self.db, brand_data["name"], "brand")
             brand_data["slug"] = slug
-            
+
             brand = Brand(**brand_data)
             self.db.add(brand)
             self.db.commit()
@@ -45,7 +45,7 @@ class BrandCrud:
         try:
             if "name" in update_data:
                 update_data["slug"] = generate_slug(self.db, update_data["name"], "brand")
-                
+
             stmt = update(Brand).where(Brand.id == brand_id).values(**update_data).returning(Brand)
             updated = self.db.execute(stmt).scalar_one_or_none()
             self.db.commit()

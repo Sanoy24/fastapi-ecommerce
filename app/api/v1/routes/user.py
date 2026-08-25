@@ -1,6 +1,6 @@
 from app.schema.address_schema import AddressCreate, AddressUpdate, AddressPublic
 from app.services.address_service import AddressService
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from app.services.user_service import UserService
 from app.schema.user_schema import (
     ChangePasswordSchema,
@@ -22,6 +22,8 @@ from app.dependencies import (
     get_address_service_dep,
     get_arq_pool,
 )
+from app.core.limiter import limiter
+from app.core.redis import redis_client
 from arq.connections import ArqRedis
 from typing import Annotated, Union
 
@@ -31,10 +33,6 @@ address_dependency = Annotated[
     AddressService, Depends(get_address_service_dep)
 ]  # Note: Fixed typo from 'depedency' to 'dependency'
 
-
-from app.core.limiter import limiter
-from fastapi import Request, status
-from app.core.redis import redis_client
 
 @router.post(
     "/register",
@@ -113,7 +111,7 @@ async def login(
     # Brute-force protection via Redis (if available)
     lockout_key = f"lockout:{login_data.email}"
     attempts_key = f"login_attempts:{login_data.email}"
-    
+
     if redis_client._client:
         is_locked = await redis_client.client.get(lockout_key)
         if is_locked:

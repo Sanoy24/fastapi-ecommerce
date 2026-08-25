@@ -95,7 +95,7 @@ class ReviewCrud:
     def pending_reviews(self):
         pending_reviews = (
             self.db.query(func.count(Review.id))
-            .filter(Review.is_approved == False)
+            .filter(~Review.is_approved)
             .scalar()
             or 0
         )
@@ -104,7 +104,7 @@ class ReviewCrud:
     def approved_reviews(self):
         approved_reviews = (
             self.db.query(func.count(Review.id))
-            .filter(Review.is_approved == True)
+            .filter(Review.is_approved)
             .scalar()
             or 0
         )
@@ -120,7 +120,7 @@ class ReviewCrud:
             self.db.query(Review)
             .join(User, Review.user_id == User.id)
             .join(Product, Review.product_id == Product.id)
-            .filter(Review.is_approved == False)
+            .filter(~Review.is_approved)
         )
 
         total = query.count()

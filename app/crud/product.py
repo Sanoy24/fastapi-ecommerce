@@ -7,9 +7,10 @@ from app.core.exceptions import ProductException
 from app.core.logger import logger
 from app.models.category import Category
 from app.models.product import Product
+from app.models.product_relation import ProductRelation
 from app.schema.admin_schema import BulkInventoryUpdateItem
 from app.schema.common_schema import PaginatedResponse, PaginationLinks, PaginationMeta, CursorPaginatedResponse
-from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
+from app.schema.product_schema import ProductCreate, ProductRelationCreate, ProductResponse, ProductUpdate
 from app.schema.product_variant_schema import ProductVariantCreate, ProductVariantUpdate
 from app.utils.generate_slug import generate_sku, generate_slug
 from typing import List, Literal
@@ -127,9 +128,9 @@ class ProductCrud:
 
         # Availability filter
         if availability == "in_stock":
-            stmt = stmt.where(Product.in_stock == True)
+            stmt = stmt.where(Product.in_stock)
         elif availability == "out_of_stock":
-            stmt = stmt.where(Product.in_stock == False)
+            stmt = stmt.where(~Product.in_stock)
         # 'all' - no filter needed
 
         # Sorting
@@ -232,16 +233,16 @@ class ProductCrud:
         stmt = select(Product).where(Product.status == "active").order_by(Product.id.desc())
         if cursor is not None:
             stmt = stmt.where(Product.id < cursor)
-        
+
         # Fetch limit + 1 to determine if there are more items
         items = self.db.scalars(stmt.limit(limit + 1)).all()
-        
+
         has_more = len(items) > limit
         if has_more:
             items = items[:-1]
-            
+
         next_cursor = items[-1].id if items else None
-        
+
         return CursorPaginatedResponse(
             data=items,
             next_cursor=next_cursor,
@@ -279,11 +280,11 @@ class ProductCrud:
             product = self.get_product_by_id(id)
             if not product:
                 return None
-                
+
             old_price = float(product.price)
             new_price_val = update_data.get("price")
             new_price = float(new_price_val) if new_price_val is not None else old_price
-            
+
             if new_price != old_price:
                 from app.models.price_history import PriceHistory
                 history = PriceHistory(
@@ -379,7 +380,7 @@ class ProductCrud:
             raise ProductException(f"Product {product_id} not found")
         if product.stock_quantity < item_quantity:
             raise ProductException(f"Insufficient stock for product {product_id}")
-            
+
         product.stock_quantity -= item_quantity
         self.db.add(product)
 
@@ -439,15 +440,15 @@ class ProductCrud:
         updated_count = 0
         failed_products = []
 
-        for update in updates:
+        for item in updates:
             product = (
-                self.db.query(Product).filter(Product.id == update.product_id).first()
+                self.db.query(Product).filter(Product.id == item.product_id).first()
             )
             if not product:
-                failed_products.append(update.product_id)
+                failed_products.append(item.product_id)
                 continue
 
-            product.stock_quantity = update.stock_quantity
+            product.stock_quantity = item.stock_quantity
             updated_count += 1
 
         self.db.commit()
@@ -510,10 +511,8 @@ class ProductCrud:
         self.db.commit()
         return True
 
-    from app.models.product_relation import ProductRelation
 
-    def add_product_relation(self, product_id: int, relation_dto: 'ProductRelationCreate') -> 'ProductRelation':
-        from app.models.product_relation import ProductRelation
+    def add_product_relation(self, product_id: int, relation_dto: ProductRelationCreate) -> ProductRelation:
         relation = ProductRelation(product_id=product_id, **relation_dto.model_dump())
         self.db.add(relation)
         try:

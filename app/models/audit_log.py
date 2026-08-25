@@ -7,9 +7,9 @@ from typing import Optional, Any
 
 class AuditLog(Base):
     """Audit log for admin actions."""
-    
+
     __tablename__ = "audit_logs"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     admin_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     action: Mapped[str] = mapped_column(String(50), nullable=False)

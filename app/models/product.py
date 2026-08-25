@@ -32,21 +32,21 @@ class Product(Base):
     sale_starts_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     sale_ends_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     compare_at_price: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
-    
+
     stock_quantity: Mapped[int] = mapped_column(default=0)
     sku: Mapped[Optional[str]] = mapped_column(String(100), unique=True)
     image_url: Mapped[Optional[str]] = mapped_column(String(500))
     category_id: Mapped[Optional[int]] = mapped_column(ForeignKey("categories.id"))
     brand_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brands.id"))
-    
+
     # Status
     status: Mapped[str] = mapped_column(String(20), default="draft", server_default="draft")
-    
+
     # SEO
     meta_title: Mapped[Optional[str]] = mapped_column(String(70))
     meta_description: Mapped[Optional[str]] = mapped_column(String(160))
     canonical_url: Mapped[Optional[str]] = mapped_column(String(255))
-    
+
     created_at: Mapped[datetime.datetime] = mapped_column(
         default=func.current_timestamp()
     )
@@ -131,13 +131,13 @@ class Product(Base):
         """Calculate available stock (stock_quantity - active reservations)."""
         if not self.reservations:
             return self.stock_quantity
-        
+
         now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         active_reservations_qty = sum(
             res.quantity for res in self.reservations if res.expires_at > now
         )
         return self.stock_quantity - active_reservations_qty
-        
+
     @hybrid_property
     def effective_price(self) -> float:
         """Calculate effective price considering active sales (instance level)."""
@@ -149,19 +149,19 @@ class Product(Base):
                 return float(self.price)
             return float(self.sale_price)
         return float(self.price)
-        
+
     @effective_price.expression
     def effective_price(cls):
         """Calculate effective price considering active sales (class level)."""
         from sqlalchemy import case
         now = func.current_timestamp()
-        
+
         is_active_sale = (
             (cls.sale_price.is_not(None)) &
             ((cls.sale_starts_at.is_(None)) | (cls.sale_starts_at <= now)) &
             ((cls.sale_ends_at.is_(None)) | (cls.sale_ends_at >= now))
         )
-        
+
         return case(
             (is_active_sale, cls.sale_price),
             else_=cls.price

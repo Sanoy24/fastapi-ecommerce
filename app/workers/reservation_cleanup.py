@@ -13,7 +13,7 @@ async def cleanup_expired_reservations_loop():
         try:
             # Run cleanup every 5 minutes
             await asyncio.sleep(300)
-            
+
             db: Session = SessionLocal()
             try:
                 now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -31,7 +31,7 @@ async def cleanup_expired_reservations_loop():
                 logger.error(f"Error cleaning up reservations: {e}")
             finally:
                 db.close()
-                
+
         except asyncio.CancelledError:
             logger.info("Reservation cleanup task cancelled.")
             break

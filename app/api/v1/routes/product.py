@@ -1,6 +1,18 @@
-from fastapi import APIRouter, Depends, File, Path, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile, status
 from app.schema.common_schema import PaginatedResponse, CursorPaginatedResponse
-from app.schema.product_schema import ProductCreate, ProductUpdate, ProductResponse
+from app.schema.product_schema import (
+    ProductCreate,
+    ProductUpdate,
+    ProductResponse,
+    ProductRelationCreate,
+    ProductRelationResponse,
+)
+from app.schema.product_image_schema import ProductImageResponse
+from app.schema.product_variant_schema import (
+    ProductVariantCreate,
+    ProductVariantUpdate,
+    ProductVariantResponse,
+)
 from app.schema.search_schema import (
     AvailabilityFilter,
     SortByField,
@@ -56,7 +68,7 @@ async def get_all_products(
     """
     if cursor is not None:
         return product_service.get_all_products_cursor(cursor, limit)
-        
+
     return product_service.get_all_products(
         page,
         per_page,
@@ -156,8 +168,6 @@ async def upload_product_image(
     return product_service.update_product(id, update_dto=ProductUpdate.model_validate({"image_url": image_url}))
 
 
-from app.schema.product_image_schema import ProductImageResponse
-from fastapi import Form
 
 @router.get("/{id}/images", response_model=List[ProductImageResponse])
 async def get_product_gallery_images(
@@ -189,7 +199,6 @@ async def delete_gallery_image(
     product_service.delete_gallery_image(image_id)
 
 
-from app.schema.product_variant_schema import ProductVariantCreate, ProductVariantUpdate, ProductVariantResponse
 
 @router.post("/{id}/variants", response_model=ProductVariantResponse, status_code=status.HTTP_201_CREATED)
 async def create_product_variant(
@@ -224,7 +233,6 @@ async def delete_product_variant(
 ):
     product_service.delete_product_variant(variant_id)
 
-from app.schema.product_schema import ProductRelationCreate, ProductRelationResponse
 
 @router.post("/{id}/relations", response_model=ProductRelationResponse, status_code=status.HTTP_201_CREATED)
 async def create_product_relation(

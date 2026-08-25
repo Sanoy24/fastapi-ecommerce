@@ -59,4 +59,7 @@ __all__ = [
     "ShippingMethod",
     "ShippingRate",
     "ProductRelation",
+    "PaymentEvent",
+    "Promotion",
+    "ReviewVote",
 ]

@@ -29,7 +29,7 @@ class Payment(Base):
     )
     transaction_id: Mapped[str] = mapped_column(String(100))
     paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
+
     provider_payment_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     provider_event_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     refund_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0)

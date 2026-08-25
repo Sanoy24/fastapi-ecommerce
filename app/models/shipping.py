@@ -9,7 +9,7 @@ class ShippingZone(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     countries: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of country codes
-    
+
     rates: Mapped[list["ShippingRate"]] = relationship("ShippingRate", back_populates="zone", cascade="all, delete-orphan")
 
 class ShippingMethod(Base):

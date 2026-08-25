@@ -20,10 +20,10 @@ async def create_payment_intent(
     idempotency_key: str | None = Depends(check_idempotency),
 ):
     response_data = payment_service.create_payment_intent(current_user.id, payment_data.order_id)
-    
+
     if idempotency_key:
         await cache_idempotent_response(idempotency_key, response_data.model_dump())
-        
+
     return response_data
 
 

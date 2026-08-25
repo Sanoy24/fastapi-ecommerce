@@ -16,14 +16,14 @@ async def check_idempotency(
     """
     if not idempotency_key:
         return None
-        
+
     # Create a unique hash based on user (if any), path, and idempotency key
     # to prevent cross-user key collisions
     auth_header = request.headers.get("Authorization", "")
     base_string = f"{auth_header}:{request.url.path}:{idempotency_key}"
     key_hash = hashlib.sha256(base_string.encode()).hexdigest()
     redis_key = f"idempotency:{key_hash}"
-    
+
     cached_response = await redis_client.client.get(redis_key)
     if cached_response:
         data = json.loads(cached_response)
@@ -32,7 +32,7 @@ async def check_idempotency(
             status_code=data.get("status_code", 200),
             content=data.get("content", {})
         )
-        
+
     return redis_key
 
 
@@ -46,7 +46,7 @@ async def cache_idempotent_response(redis_key: str, response_data: dict, status_
     """Cache the successful response in Redis for the given key."""
     if not redis_key:
         return
-        
+
     cache_data = {
         "status_code": status_code,
         "content": response_data

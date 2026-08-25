@@ -43,7 +43,7 @@ async def create_order(
         billing_id=order_create_request.billing_address_id,
         shipping_method_id=order_create_request.shipping_method_id,
     )
-    
+
     if arq_pool:
         await arq_pool.enqueue_job(
             "send_order_confirmation_email_task",
@@ -51,12 +51,12 @@ async def create_order(
             order.order_number,
             order.total_amount
         )
-    
+
     if idempotency_key:
         from app.schema.order_schema import OrderResponse
         order_response = OrderResponse.model_validate(order)
         await cache_idempotent_response(idempotency_key, order_response.model_dump(mode="json"))
-        
+
     return order
 
 
@@ -161,10 +161,10 @@ def request_return(
         items=[item.model_dump() for item in request.items]
     )
     db.add(return_req)
-    
+
     # Update order status
     order_crud.update_order_status(order.id, "return_requested")
-    
+
     db.commit()
     db.refresh(return_req)
     return return_req

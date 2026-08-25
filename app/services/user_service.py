@@ -78,7 +78,7 @@ class UserService:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
             )
-            
+
         if not user.is_verified:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -344,21 +344,21 @@ class UserService:
         from app.utils import security
         try:
             payload = security.decode_access_token(challenge_token)
-        except JWTError:
+        except TokenError:
             raise HTTPException(status_code=401, detail="Invalid or expired challenge token.")
-        
+
         if payload.get("type") != "mfa_challenge":
             raise HTTPException(status_code=401, detail="Invalid token type.")
-            
+
         user_id = payload.get("sub")
         user = self.get_user_by_id(int(user_id))
-        
+
         if not user.mfa_enabled or not user.totp_secret:
             raise HTTPException(status_code=400, detail="MFA is not enabled for this user.")
-            
+
         if not verify_totp(user.totp_secret, code):
             raise HTTPException(status_code=401, detail="Invalid TOTP code.")
-            
+
         access_token = create_token(
             data={"sub": str(user.id)},
             expiration=timedelta(minutes=30),

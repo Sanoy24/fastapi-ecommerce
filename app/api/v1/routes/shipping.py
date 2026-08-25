@@ -18,7 +18,7 @@ admin_router = APIRouter(prefix="/admin/shipping", tags=["admin-shipping"])
 
 @router.get("/methods", response_model=List[ShippingMethodResponse])
 def get_shipping_methods(db: Session = Depends(get_db)):
-    stmt = select(ShippingMethod).where(ShippingMethod.is_active == True)
+    stmt = select(ShippingMethod).where(ShippingMethod.is_active)
     return db.scalars(stmt).all()
 
 @admin_router.post("/methods", response_model=ShippingMethodResponse, status_code=status.HTTP_201_CREATED)

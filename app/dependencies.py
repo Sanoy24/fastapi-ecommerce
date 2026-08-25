@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from arq.connections import ArqRedis
 
 from app.core.elastic_config import get_es_client
-from app.core.logger import *
+from app.core.logger import logger
 from app.core.redis import RedisClient, redis_client
 from app.db.database import SessionLocal
 from app.schema.user_schema import UserPublic

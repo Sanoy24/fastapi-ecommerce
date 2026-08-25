@@ -78,24 +78,24 @@ class OrderCrud:
         # Fetch cart items
         items = self.get_cart_items(user_id)
         self.validate_stock(items)
-        
+
         cart = items[0].cart
         def _get_price(i: CartItem) -> float:
             if i.variant_id and i.variant:
                 return float(i.variant.price)
             return float(i.product.price)
-        
+
         raw_subtotal = sum(_get_price(i) * i.quantity for i in items)
         subtotal = float(raw_subtotal)
         discount = 0.0
-        
+
         if cart.coupon and cart.coupon.is_valid:
             # Check if this user already used this coupon
             usage = self.db.query(CouponUsage).filter(
                 CouponUsage.coupon_id == cart.coupon_id,
                 CouponUsage.user_id == user_id
             ).first()
-            
+
             if usage:
                 raise OrderException("You have already used this coupon.")
 
@@ -104,7 +104,7 @@ class OrderCrud:
                     discount = subtotal * (float(cart.coupon.discount_value) / 100)
                 elif cart.coupon.discount_type == "fixed":
                     discount = float(cart.coupon.discount_value)
-                    
+
         def _address_dict(addr):
             return {
                 "street": addr.street,
@@ -113,22 +113,22 @@ class OrderCrud:
                 "postal_code": addr.postal_code,
                 "state": addr.state
             }
-            
+
         # Tax Calculation
         from app.models.tax_rate import TaxRate
         tax_amount = 0.0
-        
+
         # Determine region for tax calculation
         region = shipping_address.state or shipping_address.country
-        
+
         for item in items:
             product = item.product
             price = _get_price(item)
-            
+
             # Find applicable tax rates for this item
-            stmt = select(TaxRate).where(TaxRate.is_active == True)
+            stmt = select(TaxRate).where(TaxRate.is_active)
             tax_rates = self.db.scalars(stmt).all()
-            
+
             item_tax = 0.0
             for tr in tax_rates:
                 if tr.applies_to == "all":
@@ -137,25 +137,25 @@ class OrderCrud:
                     item_tax += price * float(tr.rate)
                 elif tr.applies_to == "region" and (tr.region and tr.region.lower() == region.lower()):
                     item_tax += price * float(tr.rate)
-            
+
             tax_amount += item_tax * item.quantity
-            
+
         tax_amount = round(tax_amount, 2)
-        
+
         # Shipping Calculation
         from app.models.shipping import ShippingMethod, ShippingZone, ShippingRate
         shipping_amount = 0.0
-        
+
         if shipping_method_id:
             method = self.db.execute(
-                select(ShippingMethod).where(ShippingMethod.id == shipping_method_id, ShippingMethod.is_active == True)
+                select(ShippingMethod).where(ShippingMethod.id == shipping_method_id, ShippingMethod.is_active)
             ).scalar_one_or_none()
-            
+
             if not method:
                 raise OrderException("Invalid or inactive shipping method")
-                
+
             shipping_amount = float(method.base_rate)
-            
+
             # Check for zone-specific rates
             # Simplification: we try to match zone by country
             country = shipping_address.country
@@ -166,7 +166,7 @@ class OrderCrud:
                     if z.countries and country in z.countries:
                         matched_zone = z
                         break
-                
+
                 if matched_zone:
                     rate = self.db.execute(
                         select(ShippingRate).where(
@@ -174,10 +174,10 @@ class OrderCrud:
                             ShippingRate.method_id == method.id
                         )
                     ).scalar_one_or_none()
-                    
+
                     if rate and rate.base_rate_override is not None:
                         shipping_amount = float(rate.base_rate_override)
-                        
+
         total_amount = max(0.0, subtotal - discount + tax_amount + shipping_amount)
 
         order = Order(
@@ -256,7 +256,7 @@ class OrderCrud:
                 order_id=order.id
             )
             self.db.add(usage)
-            
+
         # Update order history
         event = OrderEvent(
             order_id=order.id, to_status="pending", note="Order placed successfully"
@@ -437,7 +437,7 @@ class OrderCrud:
             )
             self.db.add(event)
             order.status = new_status
-            
+
             if new_status == "delivered":
                 order.delivered_at = func.current_timestamp()
             elif new_status == "cancelled":
@@ -465,7 +465,7 @@ class OrderCrud:
         order.shipped_at = shipped_at or datetime.now()
         order.tracking_number = tracking_number
         order.shipping_carrier = carrier
-        
+
         # Create Shipment record
         shipment = Shipment(
             order_id=order.id,
@@ -475,7 +475,7 @@ class OrderCrud:
             shipped_at=order.shipped_at
         )
         self.db.add(shipment)
-        
+
         event = OrderEvent(
             order_id=order.id,
             from_status="processing",

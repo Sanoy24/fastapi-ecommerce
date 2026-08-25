@@ -53,7 +53,7 @@ class CartCrud:
 
     def get_cart_item_by_product(self, cart_id: int, product_id: int, variant_id: Optional[int] = None):
         stmt = select(CartItem).where(
-            CartItem.cart_id == cart_id, 
+            CartItem.cart_id == cart_id,
             CartItem.product_id == product_id,
             CartItem.variant_id == variant_id
         )
@@ -69,7 +69,7 @@ class CartCrud:
         stmt = (
             update(CartItem)
             .where(
-                CartItem.cart_id == cart_id, 
+                CartItem.cart_id == cart_id,
                 CartItem.product_id == product_id,
                 CartItem.variant_id == variant_id
             )

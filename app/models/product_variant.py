@@ -17,7 +17,7 @@ class ProductVariant(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     product = relationship("Product", back_populates="variants")
-    
+
     # Relationships for future use
     # cart_items = relationship("CartItem", back_populates="variant")
     # order_items = relationship("OrderItem", back_populates="variant")

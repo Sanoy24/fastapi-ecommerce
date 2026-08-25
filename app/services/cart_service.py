@@ -88,10 +88,10 @@ class CartService:
             if item.variant_id and item.variant:
                 return float(item.variant.price)
             return float(item.product.price)
-            
+
         raw_subtotal = sum(item.quantity * _get_price(item) for item in cart.cart_items)
         subtotal = raw_subtotal
-        
+
         coupon = cart.coupon
         if cart.coupon_id and not coupon:
             from app.models.coupon import Coupon
@@ -104,16 +104,16 @@ class CartService:
                     subtotal -= discount
                 elif coupon.discount_type == "fixed":
                     subtotal -= float(coupon.discount_value)
-            
+
             if subtotal < 0:
                 subtotal = 0.0
-                
+
         # Evaluate Promotions
         from app.models.promotion import Promotion
         active_promotions = self.db.scalars(
             select(Promotion).where(Promotion.is_active)
         ).all()
-        
+
         applied_promotions = []
         for promo in active_promotions:
             if promo.type == "percentage_on_category" and promo.conditions and promo.rewards:
@@ -126,7 +126,7 @@ class CartService:
                             discount = (price * item.quantity) * (discount_pct / 100)
                             subtotal -= discount
                             applied_promotions.append(promo.name)
-            
+
             elif promo.type == "buy_x_get_y" and promo.conditions and promo.rewards:
                 target_prod = promo.conditions.get("product_id")
                 buy_qty = promo.conditions.get("buy_quantity", 1)
@@ -142,10 +142,10 @@ class CartService:
                             discount = discount_sets * get_qty * price
                             subtotal -= discount
                             applied_promotions.append(promo.name)
-                            
+
         if subtotal < 0:
             subtotal = 0.0
-        
+
         total_items = sum(item.quantity for item in cart.cart_items)
 
         for item in cart.cart_items:
@@ -172,10 +172,10 @@ class CartService:
         # Calculate estimated tax
         from app.models.tax_rate import TaxRate
         from app.models.address import Address
-        
+
         estimated_tax = 0.0
         tax_rates = self.db.scalars(select(TaxRate).where(TaxRate.is_active)).all()
-        
+
         # Try to find user's region
         region = None
         if cart.user_id:
@@ -184,7 +184,7 @@ class CartService:
             ).scalar_one_or_none()
             if default_addr:
                 region = default_addr.state or default_addr.country
-                
+
         for item in cart.cart_items:
             product = item.product
             price = _get_price(item)
@@ -197,7 +197,7 @@ class CartService:
                 elif region and tr.applies_to == "region" and (tr.region and tr.region.lower() == region.lower()):
                     item_tax += price * float(tr.rate)
             estimated_tax += item_tax * item.quantity
-            
+
         estimated_tax = round(estimated_tax, 2)
         total_amount = round(subtotal + estimated_tax, 2)
 
@@ -212,19 +212,19 @@ class CartService:
             "total_amount": total_amount,
             "applied_promotions": applied_promotions,
         }
-        
+
     def apply_coupon(self, cart: Cart, code: str) -> Cart:
         coupon = self.db.execute(select(Coupon).where(Coupon.code == code)).scalar_one_or_none()
         if not coupon:
             raise HTTPException(status_code=404, detail="Coupon not found")
-            
+
         if not coupon.is_valid:
             raise HTTPException(status_code=400, detail="Coupon is invalid, expired, or usage limit reached")
-            
+
         raw_subtotal = sum(item.quantity * float(item.product.price) for item in cart.cart_items)
         if coupon.min_order_value and raw_subtotal < float(coupon.min_order_value):
             raise HTTPException(status_code=400, detail=f"Minimum order value of {coupon.min_order_value} required")
-            
+
         cart.coupon_id = coupon.id
         self.db.commit()
         self.db.refresh(cart)
@@ -239,7 +239,7 @@ class CartService:
     def merge_carts(self, user_id: int, session_id: Optional[str]):
         if not session_id:
             return
-            
+
         user_cart = self.cart_crud.get_cart_by_user_id(user_id=user_id)
         anon_cart = self.cart_crud.get_cart_by_session_id(session_id=session_id)
 
