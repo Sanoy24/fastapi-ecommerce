@@ -42,6 +42,7 @@ async def create_order(
         user_id=current_user.id,
         shipping_id=order_create_request.shipping_address_id,
         billing_id=order_create_request.billing_address_id,
+        shipping_method_id=order_create_request.shipping_method_id,
     )
     
     if arq_pool:

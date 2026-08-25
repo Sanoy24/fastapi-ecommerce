@@ -49,3 +49,4 @@ class OrderResponse(BaseModel):
 class OrderCreateRequest(BaseModel):
     shipping_address_id: int
     billing_address_id: int
+    shipping_method_id: Optional[int] = None

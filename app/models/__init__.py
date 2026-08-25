@@ -29,6 +29,10 @@ from .product_image import ProductImage
 from .product_variant import ProductVariant
 from .outbox_event import OutboxEvent
 from .audit_log import AuditLog
+from .price_history import PriceHistory
+from .tax_rate import TaxRate
+from .shipping import ShippingZone, ShippingMethod, ShippingRate
+from .product_relation import ProductRelation
 
 __all__ = [
     "User",
@@ -54,4 +58,10 @@ __all__ = [
     "ProductVariant",
     "OutboxEvent",
     "AuditLog",
+    "PriceHistory",
+    "TaxRate",
+    "ShippingZone",
+    "ShippingMethod",
+    "ShippingRate",
+    "ProductRelation",
 ]

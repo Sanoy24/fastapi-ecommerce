@@ -136,6 +136,38 @@ class CartService:
                 }
             )
 
+        # Calculate estimated tax
+        from app.models.tax_rate import TaxRate
+        from app.models.address import Address
+        
+        estimated_tax = 0.0
+        tax_rates = self.db.scalars(select(TaxRate).where(TaxRate.is_active == True)).all()
+        
+        # Try to find user's region
+        region = None
+        if cart.user_id:
+            default_addr = self.db.execute(
+                select(Address).where(Address.user_id == cart.user_id, Address.is_default == True)
+            ).scalar_one_or_none()
+            if default_addr:
+                region = default_addr.state or default_addr.country
+                
+        for item in cart.cart_items:
+            product = item.product
+            price = _get_price(item)
+            item_tax = 0.0
+            for tr in tax_rates:
+                if tr.applies_to == "all":
+                    item_tax += price * float(tr.rate)
+                elif tr.applies_to == "category" and tr.category_id == product.category_id:
+                    item_tax += price * float(tr.rate)
+                elif region and tr.applies_to == "region" and (tr.region and tr.region.lower() == region.lower()):
+                    item_tax += price * float(tr.rate)
+            estimated_tax += item_tax * item.quantity
+            
+        estimated_tax = round(estimated_tax, 2)
+        total_amount = round(subtotal + estimated_tax, 2)
+
         return {
             "id": cart.id,
             "items": items,
@@ -143,7 +175,8 @@ class CartService:
             "subtotal": raw_subtotal,
             "coupon_code": cart.coupon.code if cart.coupon else None,
             "discount_amount": raw_subtotal - subtotal,
-            "total_amount": subtotal,
+            "estimated_tax": estimated_tax,
+            "total_amount": total_amount,
         }
         
     def apply_coupon(self, cart: Cart, code: str) -> Cart:

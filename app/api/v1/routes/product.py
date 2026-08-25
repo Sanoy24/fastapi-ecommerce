@@ -234,3 +234,29 @@ async def delete_product_variant(
 ):
     product_service.delete_product_variant(variant_id)
 
+from app.schema.product_schema import ProductRelationCreate, ProductRelationResponse
+
+@router.post("/{id}/relations", response_model=ProductRelationResponse, status_code=status.HTTP_201_CREATED)
+async def create_product_relation(
+    id: int,
+    relation_dto: ProductRelationCreate,
+    product_service: product_dependency,
+    current_admin: admin_dependency,
+):
+    return product_service.add_product_relation(id, relation_dto)
+
+@router.get("/{id}/relations", response_model=List[ProductRelationResponse])
+async def get_product_relations(
+    id: int,
+    product_service: product_dependency,
+):
+    return product_service.get_product_relations(id)
+
+@router.delete("/relations/{relation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_product_relation(
+    relation_id: int,
+    product_service: product_dependency,
+    current_admin: admin_dependency,
+):
+    product_service.delete_product_relation(relation_id)
+

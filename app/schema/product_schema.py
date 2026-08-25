@@ -10,6 +10,10 @@ class ProductBase(BaseModel):
     price: float = Field(..., gt=0)
     stock_quantity: Optional[int] = Field(0, ge=0)
     image_url: Optional[HttpUrl] = None
+    sale_price: Optional[float] = Field(None, gt=0)
+    compare_at_price: Optional[float] = Field(None, gt=0)
+    sale_starts_at: Optional[datetime] = None
+    sale_ends_at: Optional[datetime] = None
     category_id: Optional[int] = None
     brand_id: Optional[int] = None
     status: Optional[str] = Field("draft", description="draft, active, or archived")
@@ -45,6 +49,10 @@ class ProductUpdate(BaseModel):
     stock_quantity: Optional[int] = Field(None, ge=0)
     sku: Optional[str] = Field(None, max_length=100)
     image_url: Optional[HttpUrl] = None
+    sale_price: Optional[float] = Field(None, gt=0)
+    compare_at_price: Optional[float] = Field(None, gt=0)
+    sale_starts_at: Optional[datetime] = None
+    sale_ends_at: Optional[datetime] = None
     category_id: Optional[int] = None
     brand_id: Optional[int] = None
     status: Optional[str] = Field(None, description="draft, active, or archived")
@@ -60,6 +68,7 @@ class ProductResponse(ProductBase):
     created_at: datetime
     slug: str
     sku: str
+    effective_price: float
     average_rating: Optional[float] = Field(
         None, ge=0, le=5, description="Average rating from reviews (0-5)"
     )
@@ -89,3 +98,16 @@ class ProductResponse(ProductBase):
             ]
         },
     }
+
+class ProductRelationCreate(BaseModel):
+    related_product_id: int
+    relation_type: str = Field("similar", description="similar, frequently_bought_together, accessory")
+
+class ProductRelationResponse(BaseModel):
+    id: int
+    product_id: int
+    related_product_id: int
+    relation_type: str
+    related_product: ProductResponse
+
+    model_config = {"from_attributes": True}

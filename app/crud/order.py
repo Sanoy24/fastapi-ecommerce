@@ -72,7 +72,7 @@ class OrderCrud:
                         f"Available: {product.available_stock}"
                     )
 
-    def create_order(self, user_id: int, shipping_id: int, billing_id: int):
+    def create_order(self, user_id: int, shipping_id: int, billing_id: int, shipping_method_id: int | None = None):
         shipping_address = self.validate_address(user_id, shipping_id)
         billing_address = self.validate_address(user_id, billing_id)
 
@@ -106,15 +106,80 @@ class OrderCrud:
                 elif cart.coupon.discount_type == "fixed":
                     discount = float(cart.coupon.discount_value)
                     
-        total_amount = max(0.0, subtotal - discount)
-        
         def _address_dict(addr):
             return {
                 "street": addr.street,
                 "city": addr.city,
                 "country": addr.country,
-                "postal_code": addr.postal_code
+                "postal_code": addr.postal_code,
+                "state": addr.state
             }
+            
+        # Tax Calculation
+        from app.models.tax_rate import TaxRate
+        tax_amount = 0.0
+        
+        # Determine region for tax calculation
+        region = shipping_address.state or shipping_address.country
+        
+        for item in items:
+            product = item.product
+            price = _get_price(item)
+            
+            # Find applicable tax rates for this item
+            stmt = select(TaxRate).where(TaxRate.is_active == True)
+            tax_rates = self.db.scalars(stmt).all()
+            
+            item_tax = 0.0
+            for tr in tax_rates:
+                if tr.applies_to == "all":
+                    item_tax += price * float(tr.rate)
+                elif tr.applies_to == "category" and tr.category_id == product.category_id:
+                    item_tax += price * float(tr.rate)
+                elif tr.applies_to == "region" and (tr.region and tr.region.lower() == region.lower()):
+                    item_tax += price * float(tr.rate)
+            
+            tax_amount += item_tax * item.quantity
+            
+        tax_amount = round(tax_amount, 2)
+        
+        # Shipping Calculation
+        from app.models.shipping import ShippingMethod, ShippingZone, ShippingRate
+        shipping_amount = 0.0
+        
+        if shipping_method_id:
+            method = self.db.execute(
+                select(ShippingMethod).where(ShippingMethod.id == shipping_method_id, ShippingMethod.is_active == True)
+            ).scalar_one_or_none()
+            
+            if not method:
+                raise OrderException("Invalid or inactive shipping method")
+                
+            shipping_amount = float(method.base_rate)
+            
+            # Check for zone-specific rates
+            # Simplification: we try to match zone by country
+            country = shipping_address.country
+            if country:
+                zones = self.db.scalars(select(ShippingZone)).all()
+                matched_zone = None
+                for z in zones:
+                    if z.countries and country in z.countries:
+                        matched_zone = z
+                        break
+                
+                if matched_zone:
+                    rate = self.db.execute(
+                        select(ShippingRate).where(
+                            ShippingRate.zone_id == matched_zone.id,
+                            ShippingRate.method_id == method.id
+                        )
+                    ).scalar_one_or_none()
+                    
+                    if rate and rate.base_rate_override is not None:
+                        shipping_amount = float(rate.base_rate_override)
+                        
+        total_amount = max(0.0, subtotal - discount + tax_amount + shipping_amount)
 
         order = Order(
             user_id=user_id,
@@ -126,6 +191,8 @@ class OrderCrud:
             order_number=generate_order_number(),
             subtotal=subtotal,
             discount_amount=discount,
+            tax_amount=tax_amount,
+            shipping_amount=shipping_amount,
             total_amount=total_amount,
             status="pending",
             tx_ref=generate_trx_ref(),

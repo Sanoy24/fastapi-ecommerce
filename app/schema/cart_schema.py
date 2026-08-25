@@ -31,6 +31,7 @@ class CartResponse(BaseModel):
     subtotal: float
     coupon_code: str | None = None
     discount_amount: float = 0.0
+    estimated_tax: float = 0.0
     total_amount: float
 
     model_config = {"from_attributes": True}

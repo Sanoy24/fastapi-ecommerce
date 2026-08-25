@@ -249,3 +249,23 @@ class ProductService:
         deleted = self.crud.delete_product_variant(variant_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Product variant not found")
+
+    from app.schema.product_schema import ProductRelationCreate, ProductRelationResponse
+
+    def add_product_relation(self, product_id: int, relation_dto: 'ProductRelationCreate') -> 'ProductRelationResponse':
+        from app.schema.product_schema import ProductRelationResponse
+        self.crud.get_product_by_id(product_id)
+        self.crud.get_product_by_id(relation_dto.related_product_id)
+        relation = self.crud.add_product_relation(product_id, relation_dto)
+        return ProductRelationResponse.model_validate(relation)
+
+    def get_product_relations(self, product_id: int) -> List['ProductRelationResponse']:
+        from app.schema.product_schema import ProductRelationResponse
+        self.crud.get_product_by_id(product_id)
+        relations = self.crud.get_product_relations(product_id)
+        return [ProductRelationResponse.model_validate(r) for r in relations]
+
+    def delete_product_relation(self, relation_id: int) -> None:
+        deleted = self.crud.delete_product_relation(relation_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Product relation not found")

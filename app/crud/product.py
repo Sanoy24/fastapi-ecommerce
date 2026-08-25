@@ -238,8 +238,8 @@ class ProductCrud:
         )
         return self.db.scalars(stmt).all()
 
-    def update_product(self, id: int, update_dto: ProductUpdate) -> Product | None:
-        """Partially update product; auto-generate slug when name changes."""
+    def update_product(self, id: int, update_dto: ProductUpdate, admin_id: int | None = None) -> Product | None:
+        """Partially update product; auto-generate slug when name changes. Records price history."""
         try:
             update_data = update_dto.model_dump(exclude_unset=True)
 
@@ -248,6 +248,24 @@ class ProductCrud:
 
             if isinstance(update_data.get("image_url"), HttpUrl):
                 update_data["image_url"] = str(update_data["image_url"])
+
+            product = self.get_product_by_id(id)
+            if not product:
+                return None
+                
+            old_price = float(product.price)
+            new_price_val = update_data.get("price")
+            new_price = float(new_price_val) if new_price_val is not None else old_price
+            
+            if new_price != old_price:
+                from app.models.price_history import PriceHistory
+                history = PriceHistory(
+                    product_id=id,
+                    old_price=old_price,
+                    new_price=new_price,
+                    changed_by_id=admin_id
+                )
+                self.db.add(history)
 
             if "name" in update_data and "slug" not in update_data:
                 update_data["slug"] = generate_slug(self.db, update_data["name"])
@@ -459,6 +477,34 @@ class ProductCrud:
 
     def delete_product_variant(self, variant_id: int) -> bool:
         stmt = delete(ProductVariant).where(ProductVariant.id == variant_id)
+        result = self.db.execute(stmt)
+        if result.rowcount == 0:
+            return False
+        self.db.commit()
+        return True
+
+    from app.models.product_relation import ProductRelation
+
+    def add_product_relation(self, product_id: int, relation_dto: 'ProductRelationCreate') -> 'ProductRelation':
+        from app.models.product_relation import ProductRelation
+        relation = ProductRelation(product_id=product_id, **relation_dto.model_dump())
+        self.db.add(relation)
+        try:
+            self.db.commit()
+            self.db.refresh(relation)
+            return relation
+        except IntegrityError as e:
+            self.db.rollback()
+            raise ProductException("Failed to add product relation") from e
+
+    def get_product_relations(self, product_id: int) -> list['ProductRelation']:
+        from app.models.product_relation import ProductRelation
+        stmt = select(ProductRelation).where(ProductRelation.product_id == product_id)
+        return self.db.scalars(stmt).all()
+
+    def delete_product_relation(self, relation_id: int) -> bool:
+        from app.models.product_relation import ProductRelation
+        stmt = delete(ProductRelation).where(ProductRelation.id == relation_id)
         result = self.db.execute(stmt)
         if result.rowcount == 0:
             return False

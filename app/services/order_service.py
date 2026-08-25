@@ -11,7 +11,7 @@ class OrderService:
         self.db = db
         self.crud = OrderCrud(db)
 
-    async def place_order(self, user_id: int, shipping_id: int, billing_id: int):
+    async def place_order(self, user_id: int, shipping_id: int, billing_id: int, shipping_method_id: int | None = None):
         lock_key = f"checkout_lock:{user_id}"
         
         # acquire lock for 10 seconds to prevent double submission
@@ -23,7 +23,7 @@ class OrderService:
             )
             
         try:
-            return self.crud.create_order(user_id, shipping_id, billing_id)
+            return self.crud.create_order(user_id, shipping_id, billing_id, shipping_method_id)
         except OrderException as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
