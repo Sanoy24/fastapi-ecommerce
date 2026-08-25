@@ -153,7 +153,7 @@ async def upload_product_image(
 ) -> ProductResponse:
     """Upload and attach an image to an existing product."""
     image_url = await save_product_image(file)
-    return product_service.update_product(id, update_dto=ProductUpdate(image_url=image_url))
+    return product_service.update_product(id, update_dto=ProductUpdate.model_validate({"image_url": image_url}))
 
 
 from app.schema.product_image_schema import ProductImageResponse

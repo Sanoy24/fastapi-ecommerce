@@ -1,6 +1,6 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Header, HTTPException
-from app.dependencies import get_db, get_payment_service_dep
+from app.dependencies import get_payment_service_dep
 from app.schema.user_schema import UserPublic
 from app.services.payment_service import PaymentService
 from app.schema.payment_schema import PaymentIntentCreate, PaymentIntentResponse
@@ -9,7 +9,6 @@ from app.utils.idempotency import check_idempotency, cache_idempotent_response
 
 router = APIRouter(tags=["payments"])
 
-user_dependency = Annotated[UserPublic, Depends(get_db)]
 payment_service_dep = Annotated[PaymentService, Depends(get_payment_service_dep)]
 
 
@@ -17,31 +16,7 @@ payment_service_dep = Annotated[PaymentService, Depends(get_payment_service_dep)
 async def create_payment_intent(
     payment_data: PaymentIntentCreate,
     payment_service: payment_service_dep,
-    current_user=Depends(get_current_user),
-    idempotency_key: str | None = Depends(check_idempotency),
-):
-    response_data = payment_service.create_payment_intent(current_user.id, payment_data.order_id)
-    
-from typing import Annotated
-from fastapi import APIRouter, Depends
-from app.dependencies import get_db, get_payment_service_dep
-from app.schema.user_schema import UserPublic
-from app.services.payment_service import PaymentService
-from app.schema.payment_schema import PaymentIntentCreate, PaymentIntentResponse
-from app.api.v1.routes.user import get_current_user
-from app.utils.idempotency import check_idempotency
-
-router = APIRouter(tags=["payments"])
-
-user_dependency = Annotated[UserPublic, Depends(get_db)]
-payment_service_dep = Annotated[PaymentService, Depends(get_payment_service_dep)]
-
-
-@router.post("/create-intent", response_model=PaymentIntentResponse)
-async def create_payment_intent(
-    payment_data: PaymentIntentCreate,
-    payment_service: payment_service_dep,
-    current_user=Depends(get_current_user),
+    current_user: UserPublic = Depends(get_current_user),
     idempotency_key: str | None = Depends(check_idempotency),
 ):
     response_data = payment_service.create_payment_intent(current_user.id, payment_data.order_id)

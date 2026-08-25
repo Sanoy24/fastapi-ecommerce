@@ -134,6 +134,11 @@ class UserService:
                 )
 
         # Ensure user still exists
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+            )
         user = self.crud.get_user(user_id=int(user_id))
         if not user:
             raise HTTPException(
@@ -336,10 +341,10 @@ class UserService:
 
     def verify_mfa_login(self, challenge_token: str, code: str) -> TokenSchema:
         from app.utils.totp import verify_totp
-        from app.utils.security import decode_token
+        from app.utils import security
         try:
-            payload = decode_token(challenge_token)
-        except TokenError:
+            payload = security.decode_access_token(challenge_token)
+        except JWTError:
             raise HTTPException(status_code=401, detail="Invalid or expired challenge token.")
         
         if payload.get("type") != "mfa_challenge":

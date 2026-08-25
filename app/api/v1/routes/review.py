@@ -5,12 +5,12 @@ from fastapi import APIRouter, Depends, status, Query
 from app.dependencies import get_current_user, get_review_service_dep
 from app.schema.review_schema import ReviewCreate, ReviewResponse, ReviewUpdate
 from app.schema.user_schema import UserPublic
-from app.services.order_service import OrderService
+from app.services.review_service import ReviewService
 
 router = APIRouter(tags=["Reviews"])
 
 user_dependency = Annotated[UserPublic, Depends(get_current_user)]
-review_dependency = Annotated[OrderService, Depends(get_review_service_dep)]
+review_dependency = Annotated[ReviewService, Depends(get_review_service_dep)]
 
 
 @router.post("/", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
