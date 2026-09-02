@@ -13,7 +13,10 @@ class ReviewCreate(ReviewBase):
 
 
 class ReviewUpdate(ReviewBase):
-    rating: Optional[int] = None
+    # Widening rating to Optional for partial updates is intentional (standard
+    # Update-DTO pattern); mypy's dataclass-style override check doesn't know
+    # Pydantic allows this.
+    rating: Optional[int] = None  # type: ignore[assignment]
     comment: Optional[str] = None
 
 

@@ -84,7 +84,7 @@ class CategoryCrud:
         """Delete a category by id. Returns True if deleted else False."""
         stmt = delete(Category).where(Category.id == id)
         result = self.db.execute(stmt)
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # type: ignore[attr-defined]
             return False
         self.db.commit()
         return True

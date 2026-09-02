@@ -167,12 +167,12 @@ if "pytest" not in sys.modules:
 
     otlp_exporter = OTLPSpanExporter(endpoint="http://tempo:4317", insecure=True)
     span_processor = BatchSpanProcessor(otlp_exporter)
-    trace.get_tracer_provider().add_span_processor(span_processor)
+    trace.get_tracer_provider().add_span_processor(span_processor)  # type: ignore[attr-defined]
 
     FastAPIInstrumentor.instrument_app(app)
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 @app.exception_handler(IdempotentResponseException)
 async def idempotency_exception_handler(request, exc: IdempotentResponseException):

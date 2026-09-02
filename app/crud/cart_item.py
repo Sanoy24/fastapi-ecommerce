@@ -115,7 +115,7 @@ class CartCrud:
             CartItem.id == item_id, CartItem.cart_id == cart_id
         )
         result = self.db.execute(stmt)
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # type: ignore[attr-defined]
             return False
         self.db.commit()
         return True
@@ -123,7 +123,7 @@ class CartCrud:
     def remove_anon_cart(self, session_id: str):
         stmt = delete(Cart).where(Cart.session_id == session_id)
         result = self.db.execute(stmt)
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # type: ignore[attr-defined]
             return False
         self.db.commit()
         # return True

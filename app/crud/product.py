@@ -124,13 +124,13 @@ class ProductCrud:
 
         # Rating filter (using hybrid property)
         if min_rating is not None:
-            stmt = stmt.where(Product.average_rating >= min_rating)
+            stmt = stmt.where(Product.average_rating >= min_rating)  # type: ignore[operator, arg-type]
 
         # Availability filter
         if availability == "in_stock":
             stmt = stmt.where(Product.in_stock)
         elif availability == "out_of_stock":
-            stmt = stmt.where(~Product.in_stock)
+            stmt = stmt.where(~Product.in_stock)  # type: ignore[operator]
         # 'all' - no filter needed
 
         # Sorting
@@ -152,9 +152,9 @@ class ProductCrud:
 
         sort_field = allowed_sorting_fields.get(sort_by or "id", Product.id)
         if sort_order == "desc":
-            stmt = stmt.order_by(sort_field.desc())
+            stmt = stmt.order_by(sort_field.desc())  # type: ignore[attr-defined]
         else:
-            stmt = stmt.order_by(sort_field.asc())
+            stmt = stmt.order_by(sort_field.asc())  # type: ignore[attr-defined]
 
         # Count total items matching filters
         count_stmt = stmt.with_only_columns(func.count())
@@ -316,7 +316,7 @@ class ProductCrud:
         """Delete product by id. Returns True if deleted else False."""
         stmt = delete(Product).where(Product.id == id)
         result = self.db.execute(stmt)
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # type: ignore[attr-defined]
             return False
         self.db.commit()
         return True
@@ -469,7 +469,7 @@ class ProductCrud:
     def delete_product_image(self, image_id: int) -> bool:
         stmt = delete(ProductImage).where(ProductImage.id == image_id)
         result = self.db.execute(stmt)
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # type: ignore[attr-defined]
             return False
         self.db.commit()
         return True
@@ -506,7 +506,7 @@ class ProductCrud:
     def delete_product_variant(self, variant_id: int) -> bool:
         stmt = delete(ProductVariant).where(ProductVariant.id == variant_id)
         result = self.db.execute(stmt)
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # type: ignore[attr-defined]
             return False
         self.db.commit()
         return True
@@ -532,7 +532,7 @@ class ProductCrud:
         from app.models.product_relation import ProductRelation
         stmt = delete(ProductRelation).where(ProductRelation.id == relation_id)
         result = self.db.execute(stmt)
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # type: ignore[attr-defined]
             return False
         self.db.commit()
         return True

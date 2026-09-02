@@ -58,7 +58,7 @@ class BrandCrud:
     def delete_brand(self, brand_id: int) -> bool:
         stmt = delete(Brand).where(Brand.id == brand_id)
         result = self.db.execute(stmt)
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # type: ignore[attr-defined]
             return False
         self.db.commit()
         return True
