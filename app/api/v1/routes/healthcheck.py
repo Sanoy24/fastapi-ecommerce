@@ -53,7 +53,7 @@ async def health_check(db: Annotated[Session, Depends(get_db)]):
         from app.core.elastic_config import get_es_client
 
         es = await get_es_client()
-        info = await es.ping()
+        info = await es.ping() if es is not None else False
         services["elasticsearch"] = ServiceStatus(
             status="ok" if info else "degraded",
             detail="" if info else "Ping returned False",

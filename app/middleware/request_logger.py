@@ -42,7 +42,7 @@ def _redact_body(data: Any) -> Any:
 
 
 def _redact_headers(headers: Dict[str, str]) -> Dict[str, Optional[str]]:
-    redacted = {}
+    redacted: Dict[str, Optional[str]] = {}
     for k, v in headers.items():
         if k.lower() in SENSITIVE_HEADERS:
             redacted[k] = "<redacted>"

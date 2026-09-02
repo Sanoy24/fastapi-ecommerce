@@ -155,7 +155,7 @@ def require_admin(
 async def get_optional_user(
     user_service: Annotated[UserService, Depends(get_user_service_dep)],
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(oauth_scheme)],
-) -> UserPublic:
+) -> UserPublic | None:
     if not credentials:
         return None
 
@@ -175,7 +175,7 @@ async def get_optional_user(
 def get_coupon_service_dep(db: Session = Depends(get_db)):
     return CouponService(db)
 
-def get_arq_pool(request: Request) -> ArqRedis:
+def get_arq_pool(request: Request) -> ArqRedis | None:
     """Get the ARQ Redis pool attached to the app state."""
     return getattr(request.app.state, "arq_pool", None)
 

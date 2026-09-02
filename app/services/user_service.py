@@ -76,7 +76,7 @@ class UserService:
         user.verification_token = None
         self.db.commit()
 
-    def authenticate_user(self, user_login_data: LoginSchema) -> User:
+    def authenticate_user(self, user_login_data: LoginSchema) -> User | None:
         """Return the User if credentials are valid, else None."""
         user = self.crud.get_user_by_email(email=user_login_data.email)
         if not user:

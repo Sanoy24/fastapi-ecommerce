@@ -1,6 +1,7 @@
 from app.schema.address_schema import AddressCreate, AddressUpdate, AddressPublic
 from app.services.address_service import AddressService
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from app.models.user import User
 from app.services.user_service import UserService
 from app.schema.user_schema import (
     ChangePasswordSchema,
@@ -45,8 +46,8 @@ async def create_user(
     request: Request,
     create_user_data: CreateUserSchema,
     user_service: user_dependency,
-    arq_pool: Annotated[ArqRedis, Depends(get_arq_pool)],
-) -> UserPublic:
+    arq_pool: Annotated[ArqRedis | None, Depends(get_arq_pool)],
+) -> User:
     """
     Register a new user and return the public profile.
 
@@ -224,7 +225,7 @@ async def delete_user(
     - HTTPException: If the user lacks permission or deletion fails (e.g., 403 Forbidden).
     """
     user_service.delete_user(id=current_user.id)
-    return {"detail": "User deleted successfully"}
+    return DeleteUserResponseModel(detail="User deleted successfully")
 
 
 @router.post(
@@ -357,7 +358,7 @@ async def forgot_password(
     request: Request,
     data: ForgotPasswordSchema,
     user_service: user_dependency,
-    arq_pool: Annotated[ArqRedis, Depends(get_arq_pool)],
+    arq_pool: Annotated[ArqRedis | None, Depends(get_arq_pool)],
 ) -> dict:
     """Initiate the password-reset flow for the given email."""
     await user_service.forgot_password(email=data.email, arq_pool=arq_pool)

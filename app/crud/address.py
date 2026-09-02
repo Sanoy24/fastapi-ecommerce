@@ -32,7 +32,7 @@ class AddressCrud:
         ).update({"is_default": False})
         self.db.commit()
 
-    def get_single_address(self, address_id: int) -> Address:
+    def get_single_address(self, address_id: int) -> Address | None:
         """
         Get a single address by ID
         """

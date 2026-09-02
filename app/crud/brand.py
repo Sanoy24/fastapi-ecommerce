@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update, delete
+from typing import Sequence
 from sqlalchemy.exc import IntegrityError
 from app.models.brand import Brand
 from app.schema.brand_schema import BrandCreate, BrandUpdate
@@ -33,7 +34,7 @@ class BrandCrud:
         stmt = select(Brand).where(Brand.slug == slug)
         return self.db.scalar(stmt)
 
-    def get_all_brands(self) -> list[Brand]:
+    def get_all_brands(self) -> Sequence[Brand]:
         stmt = select(Brand).order_by(Brand.name)
         return self.db.scalars(stmt).all()
 

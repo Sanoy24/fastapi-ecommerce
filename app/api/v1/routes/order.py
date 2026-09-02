@@ -30,7 +30,7 @@ async def create_order(
     order_create_request: OrderCreateRequest,
     current_user: Annotated[UserPublic, Depends(get_current_user)],
     order_service: order_dependency,
-    arq_pool: Annotated[ArqRedis, Depends(get_arq_pool)],
+    arq_pool: Annotated[ArqRedis | None, Depends(get_arq_pool)],
     idempotency_key: str | None = Depends(check_idempotency),
 ):
     """

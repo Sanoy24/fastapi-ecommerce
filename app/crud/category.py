@@ -4,6 +4,7 @@ from app.core.exceptions import CategoryCreationError, CategoryUpdateError
 from app.models.category import Category
 from app.schema.category_schema import CreateCategory, UpdateCategory
 from sqlalchemy import delete, select, update
+from typing import Sequence
 from sqlalchemy.exc import IntegrityError
 from app.core.logger import logger
 from app.utils.generate_slug import generate_slug
@@ -49,7 +50,7 @@ class CategoryCrud:
         stmt = select(Category).where(Category.slug == slug)
         return self.db.scalar(stmt)
 
-    def update_category(self, id: int, update_dto: UpdateCategory) -> Category:
+    def update_category(self, id: int, update_dto: UpdateCategory) -> Category | None:
         """Partially update a category; returns the updated model."""
         try:
             update_data = update_dto.model_dump(exclude_unset=True)
@@ -88,7 +89,7 @@ class CategoryCrud:
         self.db.commit()
         return True
 
-    def get_all_categories(self) -> list[Category]:
+    def get_all_categories(self) -> Sequence[Category]:
         """List all categories ordered by id."""
         stmt = select(Category).order_by(Category.id)
         result = self.db.scalars(stmt).all()

@@ -8,7 +8,7 @@ from app.core.logger import logger
 es: AsyncElasticsearch | None = None
 
 
-async def get_es_client() -> AsyncElasticsearch:
+async def get_es_client() -> AsyncElasticsearch | None:
     global es
 
     if es is None:

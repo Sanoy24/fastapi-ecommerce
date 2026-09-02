@@ -65,7 +65,7 @@ class CartCrud:
 
     def update_existing_cart_item(
         self, cart_id: int, product_id: int, quantity: int, variant_id: Optional[int] = None
-    ) -> CartItem:
+    ) -> CartItem | None:
         stmt = (
             update(CartItem)
             .where(
@@ -90,7 +90,7 @@ class CartCrud:
         self.db.refresh(new_item)
         return new_item
 
-    def get_cart_item_by_cart_id(self, cart_id: int, item_id: int) -> CartItem:
+    def get_cart_item_by_cart_id(self, cart_id: int, item_id: int) -> CartItem | None:
         stmt = select(CartItem).where(
             CartItem.id == item_id, CartItem.cart_id == cart_id
         )
@@ -99,7 +99,7 @@ class CartCrud:
             return None
         return result
 
-    def update_item(self, cart_id: int, item_id: int, data: CartItemUpdate) -> CartItem:
+    def update_item(self, cart_id: int, item_id: int, data: CartItemUpdate) -> CartItem | None:
         stmt = (
             update(CartItem)
             .where(CartItem.id == item_id, CartItem.cart_id == cart_id)

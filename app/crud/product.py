@@ -13,7 +13,7 @@ from app.schema.common_schema import PaginatedResponse, PaginationLinks, Paginat
 from app.schema.product_schema import ProductCreate, ProductRelationCreate, ProductResponse, ProductUpdate
 from app.schema.product_variant_schema import ProductVariantCreate, ProductVariantUpdate
 from app.utils.generate_slug import generate_sku, generate_slug
-from typing import List, Literal
+from typing import List, Literal, Sequence
 from app.models.product_image import ProductImage
 from app.models.product_variant import ProductVariant
 
@@ -51,7 +51,7 @@ class ProductCrud:
             logger.info(f"exception: {e}")
             raise ProductException(str(e)) from e
 
-    def get_product_detail(self, slug: str) -> Product:
+    def get_product_detail(self, slug: str) -> Product | None:
         """Retrieve a product by slug; returns None if not found."""
         stmt = select(Product).where(Product.slug == slug)
         product = self.db.scalar(stmt)
@@ -249,7 +249,7 @@ class ProductCrud:
             has_more=has_more
         )
 
-    def get_products_by_category_id(self, category_id: int) -> list[Product]:
+    def get_products_by_category_id(self, category_id: int) -> Sequence[Product]:
         stmt = (
             select(Product)
             .where(Product.category_id == category_id)
@@ -257,7 +257,7 @@ class ProductCrud:
         )
         return self.db.scalars(stmt).all()
 
-    def get_products_by_category_slug(self, slug: str) -> list[Product]:
+    def get_products_by_category_slug(self, slug: str) -> Sequence[Product]:
         stmt = (
             select(Product)
             .join(Category, Product.category_id == Category.id)
@@ -462,7 +462,7 @@ class ProductCrud:
         self.db.refresh(image)
         return image
 
-    def get_product_images(self, product_id: int) -> list[ProductImage]:
+    def get_product_images(self, product_id: int) -> Sequence[ProductImage]:
         stmt = select(ProductImage).where(ProductImage.product_id == product_id).order_by(ProductImage.display_order)
         return self.db.scalars(stmt).all()
 
@@ -485,7 +485,7 @@ class ProductCrud:
             self.db.rollback()
             raise ProductException("Variant sku already exists") from e
 
-    def get_product_variants(self, product_id: int) -> list[ProductVariant]:
+    def get_product_variants(self, product_id: int) -> Sequence[ProductVariant]:
         stmt = select(ProductVariant).where(ProductVariant.product_id == product_id)
         return self.db.scalars(stmt).all()
 
@@ -523,7 +523,7 @@ class ProductCrud:
             self.db.rollback()
             raise ProductException("Failed to add product relation") from e
 
-    def get_product_relations(self, product_id: int) -> list['ProductRelation']:
+    def get_product_relations(self, product_id: int) -> Sequence['ProductRelation']:
         from app.models.product_relation import ProductRelation
         stmt = select(ProductRelation).where(ProductRelation.product_id == product_id)
         return self.db.scalars(stmt).all()

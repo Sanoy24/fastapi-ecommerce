@@ -28,7 +28,10 @@ class BrandService:
 
     def update_brand(self, brand_id: int, update_dto: BrandUpdate) -> Brand:
         self.get_brand_by_id(brand_id) # ensure exists
-        return self.crud.update_brand(brand_id, update_dto)
+        updated = self.crud.update_brand(brand_id, update_dto)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Brand not found")
+        return updated
 
     def delete_brand(self, brand_id: int) -> None:
         self.get_brand_by_id(brand_id) # ensure exists

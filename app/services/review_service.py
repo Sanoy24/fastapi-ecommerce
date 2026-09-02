@@ -4,7 +4,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.crud.review import ReviewCrud
-from app.schema.review_schema import ReviewCreate, ReviewResponse, ReviewUpdate
+from app.models.review import Review
+from app.schema.review_schema import ReviewCreate, ReviewUpdate
 from app.schema.user_schema import UserPublic
 
 
@@ -13,21 +14,21 @@ class ReviewService:
         self.db = db
         self.crud = ReviewCrud(db=db)
 
-    def create_review(self, review: ReviewCreate, user_id: int) -> ReviewResponse:
+    def create_review(self, review: ReviewCreate, user_id: int) -> Review:
         """Create a new review."""
         db_review = self.crud.create_review(review=review, user_id=user_id)
         return db_review
 
     def get_reviews_by_product(
         self, product_id: int, skip: int = 0, limit: int = 100
-    ) -> List[ReviewResponse]:
+    ) -> List[Review]:
         """Get all reviews for a specific product."""
         reviews = self.crud.get_reviews_by_product(
             product_id=product_id, skip=skip, limit=limit
         )
         return reviews
 
-    def get_review(self, review_id: int) -> ReviewResponse:
+    def get_review(self, review_id: int) -> Review:
         """Get a specific review by ID."""
         review = self.crud.get_review(review_id=review_id)
         if not review:
@@ -38,7 +39,7 @@ class ReviewService:
 
     def update_review(
         self, review_id: int, review_update: ReviewUpdate, current_user: UserPublic
-    ) -> ReviewResponse:
+    ) -> Review:
         """Update a review."""
         db_review = self.crud.get_review(review_id=review_id)
         if not db_review:
