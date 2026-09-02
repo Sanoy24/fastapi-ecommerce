@@ -71,11 +71,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Run Safety Check
+      - name: Run pip-audit
         run: |
-          pip install safety
+          pip install pip-audit
           pip install poetry
           poetry self add poetry-plugin-export
           poetry install --no-interaction --no-ansi
-          poetry export -f requirements.txt --output requirements.txt
-          safety scan -r requirements.txt
+          poetry export -f requirements.txt --output requirements.txt --without-hashes
+          pip-audit -r requirements.txt
