@@ -96,7 +96,7 @@ app = FastAPI(
     lifespan=lifespan,
     title="E-Commerce Backend API",
     description="RESTful API for managing the product catalog, user authentication, shopping carts, and order processing for the online store.",
-    version="1.0.0",
+    version="2.0.0",
     contact={
         "name": "Yonas Mekonnen",
         "email": "myonas886@gmail.com",

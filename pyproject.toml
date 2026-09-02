@@ -1,6 +1,6 @@
 [project]
 name = "fastapi-ecommerce"
-version = "1.0.0"
+version = "2.0.0"
 description = "A scalable and modular eCommerce REST API built with FastAPI, SQLAlchemy, and JWT authentication."
 authors = [
     {name = "Yonas Mekonnen",email = "myonas886@gmail.com"}
