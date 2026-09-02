@@ -45,7 +45,7 @@ class UserService:
         self.crud = UserCrud(db=db)
         self.redis = redis
 
-    def create_user(self, user_create_data: CreateUserSchema) -> UserPublic:
+    def create_user(self, user_create_data: CreateUserSchema) -> User:
         """Create a new user; raises 400 if email already registered."""
         if self.crud.get_user_by_email(user_create_data.email):
             raise HTTPException(
@@ -58,6 +58,23 @@ class UserService:
         self.db.commit()
         self.db.refresh(user)
         return user
+
+    def verify_email(self, token: str) -> None:
+        """
+        Verify a user's email address using their verification token.
+
+        Raises:
+            HTTPException 400 if the token is invalid.
+        """
+        user = self.crud.get_user_by_verification_token(token)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification token",
+            )
+        user.is_verified = True
+        user.verification_token = None
+        self.db.commit()
 
     def authenticate_user(self, user_login_data: LoginSchema) -> User:
         """Return the User if credentials are valid, else None."""

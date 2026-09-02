@@ -6,6 +6,7 @@ from app.db.database import SessionLocal
 from app.models.outbox_event import OutboxEvent
 from sqlalchemy import select, func
 
+
 async def process_outbox_events_task(ctx):
     """
     Periodic task to process pending outbox events.
@@ -18,9 +19,16 @@ async def process_outbox_events_task(ctx):
     # For now, we'll run it directly as this worker will block for DB operations.
     def _process():
         with SessionLocal() as db:
-            events = db.execute(
-                select(OutboxEvent).where(OutboxEvent.status == "pending").limit(50).with_for_update(skip_locked=True)
-            ).scalars().all()
+            events = (
+                db.execute(
+                    select(OutboxEvent)
+                    .where(OutboxEvent.status == "pending")
+                    .limit(50)
+                    .with_for_update(skip_locked=True)
+                )
+                .scalars()
+                .all()
+            )
 
             for event in events:
                 try:
@@ -40,21 +48,27 @@ async def process_outbox_events_task(ctx):
     logger.info("Finished outbox event processing")
 
 
-
-async def send_order_confirmation_email_task(ctx, to_address: str, order_number: str, total_amount: float):
+async def send_order_confirmation_email_task(
+    ctx, to_address: str, order_number: str, total_amount: float
+):
     from app.services.email_service import send_order_confirmation_email
+
     logger.info(f"ARQ: Sending order confirmation to {to_address}")
     await send_order_confirmation_email(to_address, order_number, total_amount)
     return True
 
+
 async def send_password_reset_email_task(ctx, to_address: str, reset_token: str):
     from app.services.email_service import send_password_reset_email
+
     logger.info(f"ARQ: Sending password reset to {to_address}")
     await send_password_reset_email(to_address, reset_token)
     return True
 
+
 async def send_verification_email_task(ctx, to_address: str, verification_token: str):
     from app.services.email_service import send_verification_email
+
     logger.info(f"ARQ: Sending verification email to {to_address}")
     await send_verification_email(to_address, verification_token)
     return True
@@ -71,18 +85,24 @@ async def detect_abandoned_carts_task(ctx):
         from app.models.user import User
         import datetime
 
-        cutoff = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(hours=24)
+        cutoff = datetime.datetime.now(datetime.timezone.utc).replace(
+            tzinfo=None
+        ) - datetime.timedelta(hours=24)
 
         with SessionLocal() as db:
             # find carts with activity older than 24h, having items, and a user with email
-            carts = db.execute(
-                select(Cart)
-                .join(User)
-                .where(Cart.last_activity_at < cutoff)
-                .where(Cart.user_id.isnot(None))
-                # Note: In a production app, we would add a flag to track if we already sent the email
-                .limit(100)
-            ).scalars().all()
+            carts = (
+                db.execute(
+                    select(Cart)
+                    .join(User)
+                    .where(Cart.last_activity_at < cutoff)
+                    .where(Cart.user_id.isnot(None))
+                    # Note: In a production app, we would add a flag to track if we already sent the email
+                    .limit(100)
+                )
+                .scalars()
+                .all()
+            )
 
             for cart in carts:
                 if cart.cart_items and cart.user:
@@ -94,11 +114,15 @@ async def detect_abandoned_carts_task(ctx):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _process)
     logger.info("Finished abandoned cart detection")
+
+
 async def startup(ctx):
     logger.info("ARQ Worker starting...")
 
+
 async def shutdown(ctx):
     logger.info("ARQ Worker shutting down...")
+
 
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 # Parse redis url to get host/port
@@ -117,6 +141,7 @@ try:
 except Exception:
     pass
 
+
 class WorkerSettings:
     functions = [
         send_order_confirmation_email_task,
@@ -126,8 +151,9 @@ class WorkerSettings:
     ]
 
     from arq.cron import cron
+
     cron_jobs = [
-        cron(detect_abandoned_carts_task, hour={0, 12}, minute=0) # run twice a day
+        cron(detect_abandoned_carts_task, hour={0, 12}, minute=0)  # run twice a day
     ]
     redis_settings = RedisSettings(host=host, port=port, database=database)
     on_startup = startup

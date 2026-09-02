@@ -22,6 +22,26 @@ def _register_login(client: TestClient) -> dict:
     return resp.json()
 
 
+class TestEmailVerification:
+    def test_verify_email_with_valid_token(self, client: TestClient, db_session):
+        from app.models.user import User
+
+        client.post("/users/register", json=_USER)
+        user = db_session.query(User).filter(User.email == _USER["email"]).first()
+        assert user.verification_token
+
+        resp = client.get(f"/users/verify-email?token={user.verification_token}")
+        assert resp.status_code == 200
+
+        db_session.refresh(user)
+        assert user.is_verified is True
+        assert user.verification_token is None
+
+    def test_verify_email_with_invalid_token_fails(self, client: TestClient):
+        resp = client.get("/users/verify-email?token=not-a-real-token")
+        assert resp.status_code == 400
+
+
 class TestTokenSchema:
     def test_login_returns_both_tokens(self, client: TestClient):
         tokens = _register_login(client)

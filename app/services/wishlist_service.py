@@ -80,7 +80,7 @@ class WishlistService:
                     product_price=float(item.product.price),
                     product_image_url=item.product.image_url,
                     product_stock_quantity=item.product.stock_quantity,
-                    product_is_active=item.product.is_active,
+                    product_is_active=item.product.status == "active",
                     added_at=item.created_at,
                 )
             )
@@ -112,13 +112,13 @@ class WishlistService:
             )
 
         # Check if product exists and is active
-        product = self.product_crud.get_product_by_id(product_id=product_id)
+        product = self.product_crud.get_product_by_id(id=product_id)
         if not product:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
             )
 
-        if not product.is_active:
+        if product.status != "active":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Product is not available",
@@ -132,9 +132,17 @@ class WishlistService:
 
         # Add to cart
         try:
-            self.cart_crud.add_item_to_cart(
-                user_id=user_id, product_id=product_id, quantity=1
-            )
+            cart = self.cart_crud.get_cart_by_user_id(user_id=user_id)
+            if not cart:
+                cart = self.cart_crud.create_cart_by_user_id(user_id=user_id)
+
+            existing_item = self.cart_crud.get_cart_item_by_product(cart.id, product_id)
+            if existing_item:
+                self.cart_crud.update_existing_cart_item(cart.id, product_id, quantity=1)
+            else:
+                self.cart_crud.add_new_cart_item(
+                    cart_id=cart.id, product_id=product_id, quantity=1
+                )
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

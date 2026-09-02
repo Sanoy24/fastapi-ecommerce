@@ -47,6 +47,12 @@ class UserCrud:
         """
         return self.db.query(User).filter(User.email == email).first()
 
+    def get_user_by_verification_token(self, token: str) -> Optional[User]:
+        """
+        Retrieve a single user by email verification token.
+        """
+        return self.db.query(User).filter(User.verification_token == token).first()
+
     def get_total_users(self):
         total_users = self.db.query(func.count(User.id)).scalar() or 0
         return total_users
