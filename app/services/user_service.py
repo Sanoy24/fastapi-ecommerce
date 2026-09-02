@@ -350,6 +350,8 @@ class UserService:
     def disable_mfa(self, user_id: int, code: str) -> None:
         from app.utils.totp import verify_totp
         user = self.get_user_by_id(user_id)
+        if not user.totp_secret:
+            raise HTTPException(status_code=400, detail="MFA is not enabled for this user.")
         if not verify_totp(user.totp_secret, code):
             raise HTTPException(status_code=400, detail="Invalid TOTP code.")
         user.mfa_enabled = False
@@ -368,6 +370,8 @@ class UserService:
             raise HTTPException(status_code=401, detail="Invalid token type.")
 
         user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload.")
         user = self.get_user_by_id(int(user_id))
 
         if not user.mfa_enabled or not user.totp_secret:

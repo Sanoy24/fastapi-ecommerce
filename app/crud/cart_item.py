@@ -26,7 +26,7 @@ class CartCrud:
             return None
         return cart
 
-    def get_cart_by_session_id(self, session_id: int) -> Cart | None:
+    def get_cart_by_session_id(self, session_id: str) -> Cart | None:
         stmt = (
             select(Cart)
             .where(Cart.session_id == session_id)
@@ -44,7 +44,7 @@ class CartCrud:
         self.db.refresh(cart)
         return cart
 
-    def create_cart_by_session_id(self, session_id: int) -> Cart:
+    def create_cart_by_session_id(self, session_id: str) -> Cart:
         cart = Cart(session_id=session_id)
         self.db.add(cart)
         self.db.commit()

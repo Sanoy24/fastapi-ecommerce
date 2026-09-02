@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -7,7 +7,7 @@ from app.core.exceptions import ProductException
 from app.core.logger import logger
 from app.core.redis import RedisClient
 from app.crud.category import CategoryCrud
-from app.crud.product import ProductCrud
+from app.crud.product import ProductCrud, allowed_sort_by, allowed_sort_order
 from app.schema.product_schema import ProductCreate, ProductResponse, ProductUpdate
 from app.schema.common_schema import PaginatedResponse, CursorPaginatedResponse
 from app.schema.product_image_schema import ProductImageResponse
@@ -80,16 +80,16 @@ class ProductService:
 
     def get_all_products(
         self,
-        page: Optional[int],
-        per_page: Optional[int],
+        page: int,
+        per_page: int,
         search: str | None = None,
         category_id: int | None = None,
         min_price: float | None = None,
         max_price: float | None = None,
         min_rating: float | None = None,
         availability: str | None = "all",
-        sort_by: str | None = "id",
-        sort_order: str | None = "asc",
+        sort_by: allowed_sort_by | None = "id",
+        sort_order: allowed_sort_order = "asc",
     ) -> PaginatedResponse[ProductResponse]:
         """
         List all products with advanced filtering and sorting.

@@ -150,7 +150,7 @@ class ProductCrud:
             ),
         }
 
-        sort_field = allowed_sorting_fields.get(sort_by, Product.id)
+        sort_field = allowed_sorting_fields.get(sort_by or "id", Product.id)
         if sort_order == "desc":
             stmt = stmt.order_by(sort_field.desc())
         else:
@@ -158,7 +158,7 @@ class ProductCrud:
 
         # Count total items matching filters
         count_stmt = stmt.with_only_columns(func.count())
-        total_items = self.db.scalar(count_stmt)
+        total_items = self.db.scalar(count_stmt) or 0
 
         # Pagination
         offset = (page - 1) * per_page

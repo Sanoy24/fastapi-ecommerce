@@ -61,7 +61,7 @@ async def save_product_image(file: UploadFile) -> str:
     filename = _generate_filename(file.filename)
 
     if settings.STORAGE_BACKEND == "s3":
-        return await _upload_to_s3(contents, filename, file.content_type)
+        return await _upload_to_s3(contents, filename, file.content_type or "application/octet-stream")
     else:
         return await _save_locally(contents, filename)
 
