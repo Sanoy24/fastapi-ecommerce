@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 from app.crud.address import AddressCrud
 from app.schema.address_schema import AddressCreate, AddressPublic, AddressUpdate
 from fastapi import HTTPException
@@ -31,5 +32,6 @@ class AddressService:
             self.db.refresh(address)
             return AddressPublic.model_validate(address)
 
-        except Exception as e:
+        except ValidationError as e:
+            self.db.rollback()
             raise HTTPException(status_code=400, detail=e.errors())

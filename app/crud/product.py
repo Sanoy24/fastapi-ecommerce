@@ -296,7 +296,7 @@ class ProductCrud:
                 self.db.add(history)
 
             if "name" in update_data and "slug" not in update_data:
-                update_data["slug"] = generate_slug(self.db, update_data["name"])
+                update_data["slug"] = generate_slug(self.db, update_data["name"], context="product")
 
             stmt = (
                 update(Product)

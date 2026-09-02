@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.models.product import Product
 from app.models.category import Category
+from app.models.brand import Brand
 from typing import Literal, Set
 import uuid
 
@@ -13,7 +14,7 @@ def slugify(text: str, separator: str = "-") -> str:
     text = re.sub(r'[-\s]+', separator, text)
     return text
 
-SlugContext = Literal["product", "category"]
+SlugContext = Literal["product", "category", "brand"]
 
 
 def generate_slug(db: Session, name: str, context: SlugContext) -> str:
@@ -24,6 +25,8 @@ def generate_slug(db: Session, name: str, context: SlugContext) -> str:
         Model = Product
     elif context == "category":
         Model = Category
+    elif context == "brand":
+        Model = Brand
     else:
         raise ValueError(f"Invalid slug context: {context}")
 

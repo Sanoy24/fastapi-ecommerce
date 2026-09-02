@@ -45,6 +45,54 @@ def test_create_product_as_admin(client: TestClient, db_session: Session):
     assert data["price"] == product_payload["price"]
 
 
+def _make_admin(client: TestClient, db_session: Session) -> dict:
+    client.post(
+        "/users/register",
+        json={
+            "email": "admin_products@example.com",
+            "password": "Password1",
+            "first_name": "Admin",
+            "last_name": "User",
+            "phone": "1234567891",
+        },
+    )
+    stmt = select(User).where(User.email == "admin_products@example.com")
+    user = db_session.scalars(stmt).first()
+    user.role = "admin"
+    db_session.commit()
+    login_res = client.post(
+        "/users/login",
+        json={"email": "admin_products@example.com", "password": "Password1"},
+    )
+    token = login_res.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_update_product_name_regenerates_slug(client: TestClient, db_session: Session):
+    """
+    Regression test: updating a product's name without also supplying a slug
+    used to call generate_slug() with a missing required "context" argument,
+    raising a TypeError on every such update.
+    """
+    headers = _make_admin(client, db_session)
+    create_resp = client.post(
+        "/product",
+        json={"name": "Original Name", "price": 10.0, "stock_quantity": 5},
+        headers=headers,
+    )
+    product_id = create_resp.json()["id"]
+
+    update_resp = client.put(
+        f"/product/{product_id}",
+        json={"name": "Updated Name"},
+        headers=headers,
+    )
+    assert update_resp.status_code == 200
+    data = update_resp.json()
+    assert data["name"] == "Updated Name"
+    assert data["slug"].startswith("updated-name")
+
+
 def test_get_products(client: TestClient):
     response = client.get("/product")
     assert response.status_code == 200

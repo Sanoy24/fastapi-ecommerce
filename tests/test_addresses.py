@@ -78,3 +78,31 @@ class TestAddresses:
         )
         assert update_resp.status_code == 404
         assert update_resp.json()["detail"] == "Address not found"
+
+    def test_update_address_does_not_mask_non_validation_errors(
+        self, client: TestClient, auth_headers: dict, db_session, monkeypatch
+    ):
+        """
+        Regression test: AddressService.update_address used to call e.errors()
+        on *any* caught exception, which only exists on pydantic's
+        ValidationError. A plain failure (e.g. a DB error) would then crash
+        with an unrelated AttributeError instead of propagating the real error.
+        """
+        import pytest
+        from app.crud.address import AddressCrud
+        from app.schema.address_schema import AddressUpdate
+        from app.services.address_service import AddressService
+
+        resp = client.post("/users/me/address", headers=auth_headers, json=_ADDRESS)
+        address_id = resp.json()["id"]
+
+        def _boom(self, user_id):
+            raise RuntimeError("simulated database failure")
+
+        monkeypatch.setattr(AddressCrud, "update_defualt_address", _boom)
+
+        service = AddressService(db=db_session)
+        # The real (non-ValidationError) exception must propagate as-is,
+        # not get swallowed and replaced by an AttributeError from .errors().
+        with pytest.raises(RuntimeError, match="simulated database failure"):
+            service.update_address(address_id, AddressUpdate(is_default=True))

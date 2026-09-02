@@ -52,7 +52,7 @@ class BrandCrud:
             return updated
         except IntegrityError as e:
             self.db.rollback()
-            raise BaseException("Brand update failed due to duplicate name.") from e
+            raise BrandException("Brand update failed due to duplicate name.") from e
 
     def delete_brand(self, brand_id: int) -> bool:
         stmt = delete(Brand).where(Brand.id == brand_id)
