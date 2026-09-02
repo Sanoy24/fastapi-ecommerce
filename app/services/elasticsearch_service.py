@@ -19,6 +19,11 @@ class ElasticService:
         self.es = es
 
     async def ping(self):
+        if self.es is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="elasticseach unreachable",
+            )
         try:
             info = await self.es.info()
             health = await self.es.cluster.health()
@@ -52,6 +57,13 @@ class ElasticService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Maximum size is 100"
             )
+        if self.es is None:
+            return {
+                "total": {"value": 0, "relation": "eq"},
+                "took_ms": 0,
+                "results": [],
+                "error": "Search temporarily unavailable",
+            }
         if highlight and "highlight" not in query:
             query["highlight"] = {
                 "fields": {
@@ -114,6 +126,9 @@ class ElasticService:
     ) -> list[str]:
 
         if not text or len(text.strip()) < 2:
+            return []
+
+        if self.es is None:
             return []
 
         body = {
