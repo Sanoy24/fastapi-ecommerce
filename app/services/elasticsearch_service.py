@@ -15,7 +15,7 @@ from app.core.logger import logger
 class ElasticService:
     INDEX = "products"
 
-    def __init__(self, es: AsyncElasticsearch):
+    def __init__(self, es: AsyncElasticsearch | None):
         self.es = es
 
     async def ping(self):

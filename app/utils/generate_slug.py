@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app.models.product import Product
 from app.models.category import Category
 from app.models.brand import Brand
-from typing import Literal, Set
+from typing import Literal, Set, Union
 import uuid
 
 def slugify(text: str, separator: str = "-") -> str:
@@ -21,6 +21,7 @@ def generate_slug(db: Session, name: str, context: SlugContext) -> str:
     """
     Generates a unique slug for a given name and context (model).
     """
+    Model: Union[type[Product], type[Category], type[Brand]]
     if context == "product":
         Model = Product
     elif context == "category":

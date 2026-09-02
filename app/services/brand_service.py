@@ -1,3 +1,5 @@
+from typing import Sequence
+
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.crud.brand import BrandCrud
@@ -11,7 +13,7 @@ class BrandService:
     def create_brand(self, create_dto: BrandCreate) -> Brand:
         return self.crud.create_brand(create_dto)
 
-    def get_all_brands(self) -> list[Brand]:
+    def get_all_brands(self) -> Sequence[Brand]:
         return self.crud.get_all_brands()
 
     def get_brand_by_id(self, brand_id: int) -> Brand:

@@ -13,7 +13,7 @@ from app.schema.common_schema import PaginatedResponse, PaginationLinks, Paginat
 from app.schema.product_schema import ProductCreate, ProductRelationCreate, ProductResponse, ProductUpdate
 from app.schema.product_variant_schema import ProductVariantCreate, ProductVariantUpdate
 from app.utils.generate_slug import generate_sku, generate_slug
-from typing import List, Literal, Sequence
+from typing import List, Literal, Optional, Sequence
 from app.models.product_image import ProductImage
 from app.models.product_variant import ProductVariant
 
@@ -455,7 +455,7 @@ class ProductCrud:
 
         return updated_count, failed_products
 
-    def add_product_image(self, product_id: int, url: str, is_primary: bool = False, alt_text: str = None) -> ProductImage:
+    def add_product_image(self, product_id: int, url: str, is_primary: bool = False, alt_text: Optional[str] = None) -> ProductImage:
         image = ProductImage(product_id=product_id, url=url, is_primary=is_primary, alt_text=alt_text)
         self.db.add(image)
         self.db.commit()

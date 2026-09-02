@@ -355,7 +355,7 @@ class ReturnResolutionRequest(BaseModel):
 def list_return_requests(
     db: Session = Depends(get_db),
     admin: UserPublic = Depends(require_admin),
-    status: str = None
+    status: Optional[str] = None
 ):
     """Admin endpoint to list return requests."""
     from app.models.return_request import ReturnRequest

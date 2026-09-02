@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -230,7 +230,7 @@ class ProductService:
 
         return suggestions
 
-    def add_gallery_image(self, product_id: int, url: str, is_primary: bool = False, alt_text: str = None) -> ProductImageResponse:
+    def add_gallery_image(self, product_id: int, url: str, is_primary: bool = False, alt_text: Optional[str] = None) -> ProductImageResponse:
         self.crud.get_product_by_id(product_id) # ensures product exists
         image = self.crud.add_product_image(product_id, url, is_primary, alt_text)
         return ProductImageResponse.model_validate(image)

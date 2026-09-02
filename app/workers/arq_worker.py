@@ -1,6 +1,7 @@
 import asyncio
 import os
 from arq.connections import RedisSettings
+from arq.cron import cron
 from app.core.logger import logger
 from app.db.database import SessionLocal
 from app.models.outbox_event import OutboxEvent
@@ -149,8 +150,6 @@ class WorkerSettings:
         send_verification_email_task,
         detect_abandoned_carts_task,
     ]
-
-    from arq.cron import cron
 
     cron_jobs = [
         cron(detect_abandoned_carts_task, hour={0, 12}, minute=0)  # run twice a day

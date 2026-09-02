@@ -46,7 +46,7 @@ async def get_redis_manager() -> RedisClient:
     return redis_client
 
 
-async def get_elastic_manager() -> AsyncElasticsearch:
+async def get_elastic_manager() -> AsyncElasticsearch | None:
     return await get_es_client()
 
 
@@ -61,7 +61,7 @@ def get_user_service_dep(
 
 
 def get_elastic_service_dep(
-    es: Annotated[AsyncElasticsearch, Depends(get_elastic_manager)],
+    es: Annotated[AsyncElasticsearch | None, Depends(get_elastic_manager)],
 ) -> ElasticService:
     return ElasticService(es=es)
 

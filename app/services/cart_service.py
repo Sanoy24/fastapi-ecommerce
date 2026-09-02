@@ -28,6 +28,8 @@ class CartService:
                 cart = self.cart_crud.create_cart_by_user_id(user_id=user_id)
                 return cart
             else:
+                if not session_id:
+                    raise ValueError("session_id is required when user_id is not provided")
                 cart = self.cart_crud.get_cart_by_session_id(session_id=session_id)
                 if cart:
                     return cart

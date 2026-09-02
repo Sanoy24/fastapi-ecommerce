@@ -35,7 +35,7 @@ class PaymentService:
             intent = stripe.PaymentIntent.create(
                 amount=int(order.total_amount * 100),  # Amount in cents
                 currency="usd",
-                metadata={"order_id": order.id, "user_id": user_id},
+                metadata={"order_id": str(order.id), "user_id": str(user_id)},
                 automatic_payment_methods={"enabled": True},
             )
         except stripe.error.StripeError as e:

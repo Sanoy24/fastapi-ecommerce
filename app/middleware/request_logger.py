@@ -113,23 +113,17 @@ class LoggingMiddleware:
 
         # gather request metadata
         headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
+        raw_path = scope.get("raw_path")
+        client = scope.get("client")
         request_info = {
             "request_id": request_id,
             "method": scope.get("method"),
             "path": scope.get("path"),
-            "raw_path": (
-                scope.get("raw_path").decode("latin-1")
-                if scope.get("raw_path")
-                else None
-            ),
+            "raw_path": raw_path.decode("latin-1") if raw_path else None,
             "query_string": scope.get("query_string", b"").decode(
                 "utf-8", errors="replace"
             ),
-            "client": (
-                f"{scope.get('client')[0]}:{scope.get('client')[1]}"
-                if scope.get("client")
-                else None
-            ),
+            "client": f"{client[0]}:{client[1]}" if client else None,
             "headers": _redact_headers(headers),
         }
 
