@@ -201,3 +201,38 @@ async def send_guest_order_claim_email(to_address: str, order_number: str, claim
         html_body=html_body,
         text_body=text_body,
     )
+
+
+async def send_abandoned_cart_email(to_address: str, item_count: int) -> None:
+    """Remind a customer about items still sitting in their cart.
+
+    Sent by app.workers.arq_worker.detect_abandoned_carts_task, which runs
+    twice a day and only ever notifies a given cart once per abandonment
+    (see Cart.abandoned_email_sent_at) — this function itself sends
+    unconditionally each time it's called.
+    """
+    cart_url = f"{settings.FRONTEND_URL}/cart"
+    item_word = "item" if item_count == 1 else "items"
+
+    html_body = f"""
+    <html><body>
+    <h2>You left something behind 🛒</h2>
+    <p>You have <strong>{item_count} {item_word}</strong> waiting in your cart.</p>
+    <p><a href="{cart_url}" style="background:#4F46E5;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">
+        Return to Your Cart
+    </a></p>
+    <p>If you no longer want these items, you can safely ignore this email.</p>
+    </body></html>
+    """
+    text_body = (
+        f"You left something behind\n\n"
+        f"You have {item_count} {item_word} waiting in your cart.\n"
+        f"Return to your cart: {cart_url}\n"
+        f"If you no longer want these items, ignore this email."
+    )
+    await send_email(
+        to_address=to_address,
+        subject="You left something in your cart",
+        html_body=html_body,
+        text_body=text_body,
+    )

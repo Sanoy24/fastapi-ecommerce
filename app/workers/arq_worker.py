@@ -176,7 +176,14 @@ async def send_guest_order_claim_email_task(ctx, to_address: str, order_number: 
 
 async def detect_abandoned_carts_task(ctx):
     """
-    Find carts with items where last_activity_at < NOW() - 24h and user has email, enqueue recovery emails.
+    Find carts with items where last_activity_at < NOW() - 24h and user has
+    email, and send a recovery email.
+
+    Cart.abandoned_email_sent_at is what makes this safe to run twice a
+    day forever: a cart is only picked up if it's never been notified, or
+    its last_activity_at has moved past the last notification — i.e. the
+    customer touched it again since. Without that check, this cron would
+    re-email the same still-abandoned cart on every single run.
     """
     logger.info("Starting abandoned cart detection")
 
@@ -185,35 +192,51 @@ async def detect_abandoned_carts_task(ctx):
         from app.models.user import User
         import datetime
 
-        cutoff = datetime.datetime.now(datetime.timezone.utc).replace(
-            tzinfo=None
-        ) - datetime.timedelta(hours=24)
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        cutoff = now - datetime.timedelta(hours=24)
 
         with SessionLocal() as db:
-            # find carts with activity older than 24h, having items, and a user with email
             carts = (
                 db.execute(
                     select(Cart)
                     .join(User)
                     .where(Cart.last_activity_at < cutoff)
                     .where(Cart.user_id.isnot(None))
-                    # Note: In a production app, we would add a flag to track if we already sent the email
+                    .where(
+                        (Cart.abandoned_email_sent_at.is_(None))
+                        | (Cart.abandoned_email_sent_at < Cart.last_activity_at)
+                    )
                     .limit(100)
                 )
                 .scalars()
                 .all()
             )
 
+            to_notify = []
             for cart in carts:
                 if cart.cart_items and cart.user:
-                    logger.info(f"Abandoned cart detected for user {cart.user.email}")
-                    # Simulate enqueueing email
-                    # await ctx['redis'].enqueue_job('send_abandoned_cart_email_task', cart.user.email, cart.id)
-                    pass
+                    to_notify.append((cart.user.email, len(cart.cart_items)))
+                    # Marked before the email actually sends: this batch
+                    # won't be picked up again on the next run regardless
+                    # of whether the send below succeeds, matching the
+                    # "at most one reminder per abandonment" intent rather
+                    # than risking a stuck cart re-triggering endlessly if
+                    # send_abandoned_cart_email starts failing.
+                    cart.abandoned_email_sent_at = now
+
+            db.commit()
+            return to_notify
 
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _process)
-    logger.info("Finished abandoned cart detection")
+    to_notify = await loop.run_in_executor(None, _process)
+
+    from app.services.email_service import send_abandoned_cart_email
+
+    for email, item_count in to_notify:
+        logger.info(f"Sending abandoned-cart email to {email} ({item_count} item(s))")
+        await send_abandoned_cart_email(to_address=email, item_count=item_count)
+
+    logger.info(f"Finished abandoned cart detection — notified {len(to_notify)} cart(s)")
 
 
 async def startup(ctx):
