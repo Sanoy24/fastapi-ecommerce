@@ -341,10 +341,9 @@ def refund_order(
     payment_service = PaymentService(db)
     return payment_service.refund_payment(
         order_id=order_id,
-        user_id=admin.id,
+        admin_id=admin.id,
         amount=request.amount,
         reason=request.reason,
-        is_admin=True
     )
 
 class ReturnResolutionRequest(BaseModel):
