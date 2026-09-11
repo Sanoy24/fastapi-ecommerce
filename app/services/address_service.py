@@ -17,11 +17,13 @@ class AddressService:
         return AddressPublic.model_validate(address)
 
     def update_address(
-        self, address_id: int, address_data: AddressUpdate
+        self, user_id: int, address_id: int, address_data: AddressUpdate
     ) -> AddressPublic:
         address = self.crud.get_single_address(address_id)
         if not address:
             raise HTTPException(status_code=404, detail="Address not found")
+        if address.user_id != user_id:
+            raise HTTPException(status_code=403, detail="You do not have permission to modify this address")
         update_address_data = address_data.model_dump(exclude_unset=True)
         try:
             if update_address_data.get("is_default"):

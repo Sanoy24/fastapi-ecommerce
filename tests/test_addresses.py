@@ -79,6 +79,42 @@ class TestAddresses:
         assert update_resp.status_code == 404
         assert update_resp.json()["detail"] == "Address not found"
 
+    def test_update_other_users_address_is_forbidden(self, client: TestClient, auth_headers: dict, db_session):
+        """
+        Regression test: update_address used to look up the address by ID alone,
+        with no comparison against the requesting user — any authenticated user
+        could rewrite any other user's address by guessing/enumerating address_id.
+        """
+        from app.models.address import Address
+
+        owner_resp = client.post("/users/me/address", headers=auth_headers, json=_ADDRESS)
+        address_id = owner_resp.json()["id"]
+
+        attacker = {
+            "email": "attacker@test.com",
+            "password": "StrongPassword123!",
+            "first_name": "Attacker",
+            "last_name": "User",
+            "phone": "0922000000",
+        }
+        client.post("/users/register", json=attacker)
+        attacker_login = client.post(
+            "/users/login",
+            json={"email": attacker["email"], "password": attacker["password"]},
+        )
+        attacker_headers = {"Authorization": f"Bearer {attacker_login.json()['access_token']}"}
+
+        attack_resp = client.put(
+            f"/users/me/address/{address_id}",
+            headers=attacker_headers,
+            json={"city": "Attacker City"},
+        )
+        assert attack_resp.status_code == 403
+
+        db_session.expire_all()
+        address = db_session.query(Address).filter(Address.id == address_id).one()
+        assert address.city == _ADDRESS["city"]
+
     def test_update_address_does_not_mask_non_validation_errors(
         self, client: TestClient, auth_headers: dict, db_session, monkeypatch
     ):
@@ -95,6 +131,7 @@ class TestAddresses:
 
         resp = client.post("/users/me/address", headers=auth_headers, json=_ADDRESS)
         address_id = resp.json()["id"]
+        owner_id = resp.json()["user_id"]
 
         def _boom(self, user_id):
             raise RuntimeError("simulated database failure")
@@ -105,4 +142,4 @@ class TestAddresses:
         # The real (non-ValidationError) exception must propagate as-is,
         # not get swallowed and replaced by an AttributeError from .errors().
         with pytest.raises(RuntimeError, match="simulated database failure"):
-            service.update_address(address_id, AddressUpdate(is_default=True))
+            service.update_address(owner_id, address_id, AddressUpdate(is_default=True))

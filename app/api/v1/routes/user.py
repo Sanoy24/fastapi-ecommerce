@@ -297,7 +297,7 @@ async def update_address(
     if not address_data:
         raise HTTPException(status_code=400, detail="No data provided for update")
 
-    address = address_service.update_address(address_id, address_data)
+    address = address_service.update_address(current_user.id, address_id, address_data)
     return address
 
 
