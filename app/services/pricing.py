@@ -43,11 +43,18 @@ def calculate_promotion_discount(db: Session, items: List[CartItem]) -> Tuple[fl
 
     Returns (total_discount, applied_promotion_names).
     """
-    active_promotions = db.scalars(select(Promotion).where(Promotion.is_active)).all()
+    candidate_promotions = db.scalars(select(Promotion).where(Promotion.is_active)).all()
     total_discount = 0.0
     applied: List[str] = []
 
-    for promo in active_promotions:
+    for promo in candidate_promotions:
+        # is_active is checked above at the DB level as a cheap prefilter,
+        # but starts_at/ends_at were never checked at all until is_valid
+        # existed — a promotion scheduled for the future, or already
+        # expired, applied at checkout today regardless.
+        if not promo.is_valid:
+            continue
+
         if promo.type == "percentage_on_category" and promo.conditions and promo.rewards:
             target_cat = promo.conditions.get("category_id")
             discount_pct = promo.rewards.get("discount_percentage", 0)
@@ -76,3 +83,24 @@ def calculate_promotion_discount(db: Session, items: List[CartItem]) -> Tuple[fl
                         applied.append(promo.name)
 
     return total_discount, applied
+
+
+def qualifies_for_free_shipping(db: Session, raw_subtotal: float) -> bool:
+    """Whether any active, currently-valid free_shipping promotion applies.
+
+    "free_shipping" has been a valid Promotion.type since the enum was
+    defined, but calculate_promotion_discount above only ever handled
+    percentage_on_category and buy_x_get_y — a free_shipping promotion
+    could be created and would silently do nothing at checkout. Called
+    from OrderCrud._calculate_shipping_amount.
+    """
+    promotions = db.scalars(
+        select(Promotion).where(Promotion.type == "free_shipping", Promotion.is_active)
+    ).all()
+    for promo in promotions:
+        if not promo.is_valid:
+            continue
+        min_order_value = (promo.conditions or {}).get("min_order_value")
+        if min_order_value is None or raw_subtotal >= float(min_order_value):
+            return True
+    return False
