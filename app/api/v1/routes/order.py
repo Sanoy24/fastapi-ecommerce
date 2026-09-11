@@ -1,4 +1,3 @@
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List
 from app.schema.user_schema import UserPublic
@@ -12,6 +11,7 @@ from app.schema.order_schema import (
     OrderCreateRequest,
     OrderResponse,
 )
+from app.schema.return_schema import ReturnCreateRequest, ReturnResponse
 from app.utils.idempotency import check_idempotency, cache_idempotent_response
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from arq.connections import ArqRedis
@@ -180,6 +180,27 @@ def list_orders(
     return order_service.list_orders(current_user.id)
 
 
+@router.get("/returns", response_model=List[ReturnResponse], summary="List your return requests")
+def list_my_returns(
+    current_user: user_dependency,
+    db: Session = Depends(get_db),
+):
+    """
+    Registered before GET /{order_id} below for the same reason the guest
+    routes are: /{order_id} would otherwise capture "returns" as its path
+    parameter and 422 on the int conversion before this ever runs.
+    """
+    from app.models.return_request import ReturnRequest
+    from sqlalchemy import select
+
+    stmt = (
+        select(ReturnRequest)
+        .where(ReturnRequest.user_id == current_user.id)
+        .order_by(ReturnRequest.created_at.desc())
+    )
+    return db.scalars(stmt).all()
+
+
 @router.get("/{order_id}", response_model=OrderResponse)
 def get_single_order(
     current_user: user_dependency, order_service: order_dependency, order_id: int
@@ -208,16 +229,7 @@ def cancel_order(
 # request a refund by filing a return via POST /{order_id}/return below, which
 # an admin then approves and refunds through the admin endpoint.
 
-class ReturnItem(BaseModel):
-    order_item_id: int
-    quantity: int
-    reason: str
-
-class ReturnCreateRequest(BaseModel):
-    reason: str
-    items: List[ReturnItem]
-
-@router.post("/{order_id}/return")
+@router.post("/{order_id}/return", response_model=ReturnResponse)
 def request_return(
     order_id: int,
     request: ReturnCreateRequest,
@@ -240,11 +252,23 @@ def request_return(
     if order.status != "delivered":
         raise HTTPException(status_code=400, detail="Only delivered orders can be returned")
 
-    # Basic validation that the items belong to the order
-    order_item_ids = {item.id for item in order.order_items}
+    # Validate that the items belong to the order and the quantity claimed
+    # doesn't exceed what was actually ordered — checked again defensively
+    # at approval time (see admin.py resolve_return), but catching it here
+    # means the customer finds out immediately instead of after an admin
+    # rejects a pending request days later.
+    order_items_by_id = {item.id: item for item in order.order_items}
     for item in request.items:
-        if item.order_item_id not in order_item_ids:
+        order_item = order_items_by_id.get(item.order_item_id)
+        if not order_item:
             raise HTTPException(status_code=400, detail=f"Item {item.order_item_id} not part of this order")
+        if item.quantity <= 0:
+            raise HTTPException(status_code=400, detail=f"Return quantity for item {item.order_item_id} must be positive")
+        if item.quantity > order_item.quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot return {item.quantity} of item {item.order_item_id} — only {order_item.quantity} were ordered",
+            )
 
     return_req = ReturnRequest(
         order_id=order.id,

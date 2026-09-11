@@ -528,7 +528,12 @@ class OrderCrud:
             "packed": ["shipped", "refund_pending"],
             "shipped": ["delivered", "return_requested", "refunded"],
             "delivered": ["return_requested", "refunded"],
-            "return_requested": ["return_approved", "cancelled"],
+            # "delivered": a rejected return reverts the order to its prior
+            # delivered state (see admin.py resolve_return) — this was
+            # missing, so a rejection's attempt to revert silently failed
+            # (caught and swallowed as an "already in that state" no-op)
+            # and the order stayed stuck at "return_requested" forever.
+            "return_requested": ["return_approved", "delivered", "cancelled"],
             "refund_pending": ["refunded"],
             "payment_failed": ["cancelled"],
             "cancelled": [],
