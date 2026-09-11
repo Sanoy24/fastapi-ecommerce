@@ -1,37 +1,75 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 from unittest.mock import AsyncMock, patch
+from testcontainers.community.postgres import PostgresContainer
 
 from app.main import app
 from app.db.database import Base
 from app.dependencies import get_db
 
+# The suite runs against a real PostgreSQL container, not SQLite.
+#
+# It used to run on `sqlite:///:memory:`, while every real environment
+# (local docker-compose, CI, production) runs PostgreSQL. That gap let a
+# genuine bug ship straight to main: an admin analytics endpoint grouped by
+# `func.strftime(...)`, a SQLite-only function, and 500'd on every call in
+# production while the full suite stayed green. It also meant
+# `with_for_update(skip_locked=True)` — used by both the outbox worker and
+# the inventory-reservation concurrency path — was never exercised against
+# real row-level locking, since SQLite has no concept of it.
+#
+# Pinned to postgres:15-alpine to match docker-compose.yml and the CI
+# `migrations` job, so the schema this suite runs against is the same one
+# production runs against.
+_POSTGRES_IMAGE = "postgres:15-alpine"
 
-from sqlalchemy.pool import StaticPool
 
-# Create in-memory SQLite database for testing
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+@pytest.fixture(scope="session")
+def _postgres_container():
+    """One PostgreSQL container for the whole test session, not per test.
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Starting a real container per test would make the suite unusably slow;
+    starting it once and isolating tests at the data level (see `db_session`
+    below) keeps the real-database guarantee without that cost.
+    """
+    with PostgresContainer(_POSTGRES_IMAGE) as container:
+        yield container
+
+
+@pytest.fixture(scope="session")
+def _engine(_postgres_container):
+    engine = create_engine(_postgres_container.get_connection_url(), pool_pre_ping=True)
+    # Created once per session — native Postgres ENUM types in particular
+    # don't tolerate being dropped and recreated on every test the way a
+    # SQLite file conceptually could.
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    engine.dispose()
+
 
 @pytest.fixture(scope="function")
-def db_session():
-    """Create a fresh database for each test."""
-    Base.metadata.create_all(bind=engine)
+def db_session(_engine):
+    """A DB session backed by the shared container, reset before every test.
+
+    Truncating (rather than the old drop-all/create-all-per-test approach)
+    is what keeps this fast against a real, network-attached database:
+    DDL against ~30 tables on every test would dominate the suite's runtime,
+    where one DML statement does not. RESTART IDENTITY keeps primary keys
+    predictable across tests; CASCADE handles FK ordering so table order
+    here doesn't matter.
+    """
+    with _engine.begin() as conn:
+        table_names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+        conn.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
+
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
     session = TestingSessionLocal()
     try:
         yield session
     finally:
         session.close()
-        Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture(scope="function")
