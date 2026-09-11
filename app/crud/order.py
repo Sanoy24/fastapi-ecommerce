@@ -76,117 +76,28 @@ class OrderCrud:
         shipping_address = self.validate_address(user_id, shipping_id)
         billing_address = self.validate_address(user_id, billing_id)
 
-        # Fetch cart items
         items = self.get_cart_items(user_id)
         self.validate_stock(items)
 
         cart = items[0].cart
+        raw_subtotal = float(sum(get_unit_price(i) * i.quantity for i in items))
+        discount = self._calculate_discount(items, raw_subtotal, cart, user_id)
 
-        raw_subtotal = sum(get_unit_price(i) * i.quantity for i in items)
-        subtotal = float(raw_subtotal)
-        discount = 0.0
-
-        if cart.coupon and cart.coupon.is_valid:
-            # Check if this user already used this coupon
-            usage = self.db.query(CouponUsage).filter(
-                CouponUsage.coupon_id == cart.coupon_id,
-                CouponUsage.user_id == user_id
-            ).first()
-
-            if usage:
-                raise OrderException("You have already used this coupon.")
-
-            discount += calculate_coupon_discount(subtotal, cart.coupon)
-
-        # Promotions applied at checkout must match what was shown in the cart —
-        # see CartService.get_cart_details, which uses the same helper.
-        promo_discount, _applied_promotions = calculate_promotion_discount(self.db, list(items))
-        discount += promo_discount
-
-        def _address_dict(addr):
-            return {
-                "street": addr.street,
-                "city": addr.city,
-                "country": addr.country,
-                "postal_code": addr.postal_code,
-                "state": addr.state
-            }
-
-        # Tax Calculation
-        from app.models.tax_rate import TaxRate
-        tax_amount = 0.0
-
-        # Determine region for tax calculation
         region = shipping_address.state or shipping_address.country
+        tax_amount = self._calculate_tax_amount(items, region)
+        shipping_amount = self._calculate_shipping_amount(shipping_method_id, shipping_address)
 
-        for item in items:
-            product = item.product
-            price = get_unit_price(item)
-
-            # Find applicable tax rates for this item
-            stmt = select(TaxRate).where(TaxRate.is_active)
-            tax_rates = self.db.scalars(stmt).all()
-
-            item_tax = 0.0
-            for tr in tax_rates:
-                if tr.applies_to == "all":
-                    item_tax += price * float(tr.rate)
-                elif tr.applies_to == "category" and tr.category_id == product.category_id:
-                    item_tax += price * float(tr.rate)
-                elif tr.applies_to == "region" and (tr.region and tr.region.lower() == region.lower()):
-                    item_tax += price * float(tr.rate)
-
-            tax_amount += item_tax * item.quantity
-
-        tax_amount = round(tax_amount, 2)
-
-        # Shipping Calculation
-        from app.models.shipping import ShippingMethod, ShippingZone, ShippingRate
-        shipping_amount = 0.0
-
-        if shipping_method_id:
-            method = self.db.execute(
-                select(ShippingMethod).where(ShippingMethod.id == shipping_method_id, ShippingMethod.is_active)
-            ).scalar_one_or_none()
-
-            if not method:
-                raise OrderException("Invalid or inactive shipping method")
-
-            shipping_amount = float(method.base_rate)
-
-            # Check for zone-specific rates
-            # Simplification: we try to match zone by country
-            country = shipping_address.country
-            if country:
-                zones = self.db.scalars(select(ShippingZone)).all()
-                matched_zone = None
-                for z in zones:
-                    if z.countries and country in z.countries:
-                        matched_zone = z
-                        break
-
-                if matched_zone:
-                    rate = self.db.execute(
-                        select(ShippingRate).where(
-                            ShippingRate.zone_id == matched_zone.id,
-                            ShippingRate.method_id == method.id
-                        )
-                    ).scalar_one_or_none()
-
-                    if rate and rate.base_rate_override is not None:
-                        shipping_amount = float(rate.base_rate_override)
-
-        total_amount = max(0.0, subtotal - discount + tax_amount + shipping_amount)
+        total_amount = max(0.0, raw_subtotal - discount + tax_amount + shipping_amount)
 
         order = Order(
             user_id=user_id,
             shipping_address_id=shipping_id,
             billing_address_id=billing_id,
-            shipping_address_snapshot=_address_dict(shipping_address),
-            billing_address_snapshot=_address_dict(billing_address),
+            shipping_address_snapshot=self._address_snapshot(shipping_address),
+            billing_address_snapshot=self._address_snapshot(billing_address),
             coupon_id=cart.coupon_id,
             order_number=generate_order_number(),
-            subtotal=subtotal,
+            subtotal=raw_subtotal,
             discount_amount=discount,
             tax_amount=tax_amount,
             shipping_amount=shipping_amount,
@@ -197,47 +108,8 @@ class OrderCrud:
         self.db.add(order)
         self.db.flush()  # Get order.id
 
-        # Create order items + reserve stock
-        for item in items:
-            price = get_unit_price(item)
-            order_item = OrderItem(
-                order_id=order.id,
-                product_id=item.product_id,
-                variant_id=item.variant_id,
-                unit_price=price,
-                quantity=item.quantity,
-            )
-            self.db.add(order_item)
+        self._create_order_items_and_reserve_stock(order, items, user_id)
 
-            # Create inventory reservation instead of direct deduction.
-            # variant_id is set for variant items so the reservation is
-            # scoped to the variant's own stock pool, not the parent product's
-            # — see ProductVariant.available_stock / Product.available_stock.
-            reservation = InventoryReservation(
-                product_id=item.product_id,
-                variant_id=item.variant_id,
-                user_id=user_id,
-                quantity=item.quantity,
-                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15)
-            )
-            self.db.add(reservation)
-
-            # Record inventory transaction for reservation
-            qty_before = item.variant.stock_quantity if item.variant_id and item.variant else item.product.stock_quantity
-            inv_tx = InventoryTransaction(
-                product_id=item.product_id,
-                variant_id=item.variant_id,
-                order_id=order.id,
-                transaction_type="reservation",
-                quantity_change=0,  # stock_quantity doesn't change yet, but available_stock effectively does
-                quantity_before=qty_before,
-                quantity_after=qty_before,
-                note=f"Reserved {item.quantity} units for order {order.order_number}",
-                created_by=user_id
-            )
-            self.db.add(inv_tx)
-
-        # Create initial order event
         event = OrderEvent(
             order_id=order.id,
             from_status=None,
@@ -260,12 +132,6 @@ class OrderCrud:
             )
             self.db.add(usage)
 
-        # Update order history
-        event = OrderEvent(
-            order_id=order.id, to_status="pending", note="Order placed successfully"
-        )
-        self.db.add(event)
-
         # Outbox Pattern: Insert event into outbox_events in the same transaction
         from app.models.outbox_event import OutboxEvent
         outbox_event = OutboxEvent(
@@ -282,6 +148,142 @@ class OrderCrud:
         self.db.commit()
         self.db.refresh(order)
         return order
+
+    @staticmethod
+    def _address_snapshot(addr) -> dict:
+        return {
+            "street": addr.street,
+            "city": addr.city,
+            "country": addr.country,
+            "postal_code": addr.postal_code,
+            "state": addr.state,
+        }
+
+    def _calculate_discount(self, items: list[CartItem], raw_subtotal: float, cart, user_id: int) -> float:
+        """Coupon + promotion discount for a checkout, mirroring what the cart displayed."""
+        discount = 0.0
+
+        if cart.coupon and cart.coupon.is_valid:
+            # Check if this user already used this coupon
+            usage = self.db.query(CouponUsage).filter(
+                CouponUsage.coupon_id == cart.coupon_id,
+                CouponUsage.user_id == user_id
+            ).first()
+
+            if usage:
+                raise OrderException("You have already used this coupon.")
+
+            discount += calculate_coupon_discount(raw_subtotal, cart.coupon)
+
+        # Promotions applied at checkout must match what was shown in the cart —
+        # see CartService.get_cart_details, which uses the same helper.
+        promo_discount, _applied_promotions = calculate_promotion_discount(self.db, list(items))
+        discount += promo_discount
+        return discount
+
+    def _calculate_tax_amount(self, items: list[CartItem], region: str | None) -> float:
+        from app.models.tax_rate import TaxRate
+
+        tax_rates = self.db.scalars(select(TaxRate).where(TaxRate.is_active)).all()
+        tax_amount = 0.0
+
+        for item in items:
+            product = item.product
+            price = get_unit_price(item)
+
+            item_tax = 0.0
+            for tr in tax_rates:
+                if tr.applies_to == "all":
+                    item_tax += price * float(tr.rate)
+                elif tr.applies_to == "category" and tr.category_id == product.category_id:
+                    item_tax += price * float(tr.rate)
+                elif tr.applies_to == "region" and (region and tr.region and tr.region.lower() == region.lower()):
+                    item_tax += price * float(tr.rate)
+
+            tax_amount += item_tax * item.quantity
+
+        return round(tax_amount, 2)
+
+    def _calculate_shipping_amount(self, shipping_method_id: int | None, shipping_address) -> float:
+        from app.models.shipping import ShippingMethod, ShippingZone, ShippingRate
+
+        if not shipping_method_id:
+            return 0.0
+
+        method = self.db.execute(
+            select(ShippingMethod).where(ShippingMethod.id == shipping_method_id, ShippingMethod.is_active)
+        ).scalar_one_or_none()
+
+        if not method:
+            raise OrderException("Invalid or inactive shipping method")
+
+        shipping_amount = float(method.base_rate)
+
+        # Check for zone-specific rates
+        # Simplification: we try to match zone by country
+        country = shipping_address.country
+        if country:
+            zones = self.db.scalars(select(ShippingZone)).all()
+            matched_zone = None
+            for z in zones:
+                if z.countries and country in z.countries:
+                    matched_zone = z
+                    break
+
+            if matched_zone:
+                rate = self.db.execute(
+                    select(ShippingRate).where(
+                        ShippingRate.zone_id == matched_zone.id,
+                        ShippingRate.method_id == method.id
+                    )
+                ).scalar_one_or_none()
+
+                if rate and rate.base_rate_override is not None:
+                    shipping_amount = float(rate.base_rate_override)
+
+        return shipping_amount
+
+    def _create_order_items_and_reserve_stock(self, order: Order, items: list[CartItem], user_id: int) -> None:
+        """Create OrderItem rows and reserve stock instead of deducting it directly.
+        Actual deduction happens on successful payment — see
+        PaymentService._handle_successful_payment.
+        """
+        for item in items:
+            price = get_unit_price(item)
+            order_item = OrderItem(
+                order_id=order.id,
+                product_id=item.product_id,
+                variant_id=item.variant_id,
+                unit_price=price,
+                quantity=item.quantity,
+            )
+            self.db.add(order_item)
+
+            # variant_id is set for variant items so the reservation is
+            # scoped to the variant's own stock pool, not the parent product's
+            # — see ProductVariant.available_stock / Product.available_stock.
+            reservation = InventoryReservation(
+                product_id=item.product_id,
+                variant_id=item.variant_id,
+                user_id=user_id,
+                quantity=item.quantity,
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15)
+            )
+            self.db.add(reservation)
+
+            qty_before = item.variant.stock_quantity if item.variant_id and item.variant else item.product.stock_quantity
+            inv_tx = InventoryTransaction(
+                product_id=item.product_id,
+                variant_id=item.variant_id,
+                order_id=order.id,
+                transaction_type="reservation",
+                quantity_change=0,  # stock_quantity doesn't change yet, but available_stock effectively does
+                quantity_before=qty_before,
+                quantity_after=qty_before,
+                note=f"Reserved {item.quantity} units for order {order.order_number}",
+                created_by=user_id
+            )
+            self.db.add(inv_tx)
 
     def get_orders(self, user_id: int):
         stmt = select(Order).where(Order.user_id == user_id)

@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from app.models.order_event import OrderEvent
 from app.models.product import Product
 
 
@@ -70,6 +71,13 @@ def test_create_order(client: TestClient, db_session: Session):
     order_data = order_res.json()
     assert order_data["total_amount"] == 100.0
     assert order_data["status"] == "pending"
+
+    # Regression test: create_order used to add two identical "Order placed"
+    # OrderEvent rows (one plain, one duplicated further down in the same
+    # method) — there should be exactly one placement event per order.
+    events = db_session.query(OrderEvent).filter(OrderEvent.order_id == order_data["id"]).all()
+    assert len(events) == 1
+    assert events[0].to_status == "pending"
 
 
 def test_get_orders(client: TestClient, db_session: Session):
