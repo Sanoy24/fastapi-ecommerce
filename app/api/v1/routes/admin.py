@@ -23,6 +23,7 @@ from app.schema.admin_schema import (
     TopSellingProduct,
 )
 from app.schema.user_schema import UserPublic
+from app.schema.return_schema import ReturnResponse, ReturnResolutionRequest
 from app.services.email_service import send_order_shipped_email
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -380,11 +381,7 @@ def refund_order(
         reason=request.reason,
     )
 
-class ReturnResolutionRequest(BaseModel):
-    status: str  # approved, rejected
-    resolution_note: str
-
-@router.get("/returns", summary="List all return requests")
+@router.get("/returns", response_model=list[ReturnResponse], summary="List all return requests")
 def list_return_requests(
     db: Session = Depends(get_db),
     admin: UserPublic = Depends(require_admin),
@@ -401,17 +398,27 @@ def list_return_requests(
     returns = db.scalars(stmt).all()
     return returns
 
-@router.patch("/returns/{return_id}", summary="Approve or reject a return")
+@router.patch("/returns/{return_id}", response_model=ReturnResponse, summary="Approve or reject a return")
 def resolve_return(
     return_id: int,
     request: ReturnResolutionRequest,
     db: Session = Depends(get_db),
     admin: UserPublic = Depends(require_admin)
 ):
-    """Admin endpoint to resolve a return request."""
+    """
+    Admin endpoint to resolve a return request.
+
+    Approving a return restocks the returned quantities and automatically
+    refunds the corresponding amount — previously this only flipped the
+    return's own status and the order's status, leaving an admin to
+    remember to restock and issue the refund as two separate manual steps.
+    """
     from app.models.return_request import ReturnRequest
+    from app.models.order_item import OrderItem
+    from app.models.inventory_transaction import InventoryTransaction
     from app.crud.order import OrderCrud
-    from sqlalchemy import func
+    from app.services.payment_service import PaymentService
+    from sqlalchemy import func, select
 
     return_req = db.get(ReturnRequest, return_id)
     if not return_req:
@@ -423,22 +430,97 @@ def resolve_return(
     if request.status not in ["approved", "rejected"]:
         raise HTTPException(status_code=400, detail="Status must be approved or rejected")
 
+    order_crud = OrderCrud(db)
+    refund_amount = 0.0
+
+    if request.status == "approved":
+        # A second, separate return request could target the same order
+        # item as one already approved — without this check, approving it
+        # would restock and refund that item a second time.
+        other_approved_items = {
+            item["order_item_id"]
+            for other in db.scalars(
+                select(ReturnRequest).where(
+                    ReturnRequest.order_id == return_req.order_id,
+                    ReturnRequest.status == "approved",
+                    ReturnRequest.id != return_req.id,
+                )
+            ).all()
+            for item in other.items
+        }
+        overlap = {i["order_item_id"] for i in return_req.items} & other_approved_items
+        if overlap:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Item(s) {sorted(overlap)} were already covered by a previously approved return",
+            )
+
+        for returned in return_req.items:
+            order_item = db.get(OrderItem, returned["order_item_id"])
+            if not order_item:
+                continue  # validated to exist at request time; tolerate a since-deleted row
+            if returned["quantity"] > order_item.quantity:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot return {returned['quantity']} of item {order_item.id} — only {order_item.quantity} were ordered",
+                )
+
+            refund_amount += float(order_item.unit_price) * returned["quantity"]
+
+            # A variant item restocks the variant's own pool, not the
+            # parent product's — they're separate (see
+            # ProductVariant.available_stock).
+            target = order_item.variant if (order_item.variant_id and order_item.variant) else order_item.product
+            qty_before = target.stock_quantity
+            target.stock_quantity += returned["quantity"]
+
+            db.add(InventoryTransaction(
+                product_id=order_item.product_id,
+                variant_id=order_item.variant_id,
+                order_id=return_req.order_id,
+                transaction_type="return",
+                quantity_change=returned["quantity"],
+                quantity_before=qty_before,
+                quantity_after=target.stock_quantity,
+                note=f"Restocked from approved return #{return_req.id}",
+                created_by=admin.id,
+            ))
+
     return_req.status = request.status
     return_req.resolution_note = request.resolution_note
     return_req.resolved_at = func.current_timestamp()
 
-    order_crud = OrderCrud(db)
     new_order_status = "return_approved" if request.status == "approved" else "delivered"
-
     try:
         order_crud.update_order_status(return_req.order_id, new_order_status, admin_id=admin.id)
     except HTTPException:
         # Ignore transition errors if the order is already in that state
         pass
 
+    refund_error = None
+    if request.status == "approved" and refund_amount > 0:
+        try:
+            PaymentService(db).refund_payment(
+                order_id=return_req.order_id,
+                admin_id=admin.id,
+                amount=refund_amount,
+                reason="return_approved",
+            )
+        except HTTPException as e:
+            # Restocking and the return's own approval still stand — an
+            # automatic refund failing (e.g. no completed payment on file,
+            # a Stripe error) shouldn't also leave the returned stock
+            # un-restocked. The admin follows up manually via
+            # POST /admin/orders/{order_id}/refund; refund_error below
+            # surfaces that this order still needs it.
+            refund_error = str(e.detail)
+
     db.commit()
     db.refresh(return_req)
-    return return_req
+
+    response = ReturnResponse.model_validate(return_req)
+    response.refund_error = refund_error
+    return response
 
 @router.get(
     "/reviews",
