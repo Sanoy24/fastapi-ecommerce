@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.models.payment import Payment
-from datetime import datetime
+from app.utils.time import utcnow
 
 
 class PaymentCrud:
@@ -34,7 +34,7 @@ class PaymentCrud:
     def update_payment_status(self, payment: Payment, status: str):
         payment.status = status
         if status == "completed":
-            payment.paid_at = datetime.utcnow()
+            payment.paid_at = utcnow()
         self.db.commit()
         self.db.refresh(payment)
         return payment

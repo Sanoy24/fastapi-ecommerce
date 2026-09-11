@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
-from datetime import datetime
 from app.db.database import Base
+from app.utils.time import utcnow
 from sqlalchemy.orm import relationship
 
 class ProductImage(Base):
@@ -12,6 +12,6 @@ class ProductImage(Base):
     alt_text = Column(String(255), nullable=True)
     is_primary = Column(Boolean, default=False)
     display_order = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     product = relationship("Product", back_populates="images")

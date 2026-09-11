@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, ForeignKey, DateTime, String, JSON
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from app.db.database import Base
+from app.utils.time import utcnow
 
 class Shipment(Base):
     __tablename__ = "shipments"
@@ -15,7 +15,7 @@ class Shipment(Base):
     delivered_at = Column(DateTime, nullable=True)
     estimated_delivery = Column(DateTime, nullable=True)
     shipment_items = Column(JSON, nullable=True)  # [{order_item_id, quantity}]
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     order = relationship("Order", back_populates="shipments")

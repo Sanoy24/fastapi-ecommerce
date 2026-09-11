@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, ForeignKey, DateTime, String
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from app.db.database import Base
+from app.utils.time import utcnow
 
 class InventoryTransaction(Base):
     __tablename__ = "inventory_transactions"
@@ -18,7 +18,7 @@ class InventoryTransaction(Base):
     quantity_after = Column(Integer, nullable=False)
     note = Column(String(255), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     product = relationship("Product")
     variant = relationship("ProductVariant")
