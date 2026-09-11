@@ -63,6 +63,38 @@ def get_sales_analytics(
     return admin_service.get_sales_analytics()
 
 
+def build_sales_trends_stmt(cutoff: datetime):
+    """
+    Build the daily sales-trend aggregate, grouped by calendar day.
+
+    Day truncation is spelled `func.date()` because that is the one form
+    PostgreSQL and SQLite agree on: PostgreSQL parses it as the function-call
+    syntax for `CAST(x AS date)`, SQLite as its own built-in `date()`. The
+    alternatives all break on one side or the other —
+    `strftime()` does not exist in PostgreSQL (which is how this endpoint used
+    to 500 in production), `date_trunc()` does not exist in SQLite, and
+    `CAST(x AS DATE)` silently evaluates to just the year on SQLite.
+
+    Exposed at module level so the statement can be compiled against a
+    PostgreSQL dialect in tests without needing a live database.
+    """
+    from sqlalchemy import select, func
+    from app.models.order import Order
+
+    day = func.date(Order.order_date)
+    return (
+        select(
+            day.label("date"),
+            func.sum(Order.total_amount).label("revenue"),
+            func.count(Order.id).label("orders_count"),
+        )
+        .where(Order.order_date >= cutoff)
+        .where(Order.status != "cancelled")
+        .group_by(day)
+        .order_by(day)
+    )
+
+
 @router.get(
     "/analytics/sales/trends",
     response_model=list[SalesOverTime],
@@ -74,28 +106,21 @@ def get_sales_trends(
     days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
 ):
     """Get sales revenue and order counts over time (Admin only)."""
-    from sqlalchemy import select, func
-    from app.models.order import Order
     from datetime import timedelta
 
-    db = admin_service.db
     cutoff = datetime.now() - timedelta(days=days)
+    results = admin_service.db.execute(build_sales_trends_stmt(cutoff)).all()
 
-    # SQLite friendly date truncation
-    stmt = (
-        select(
-            func.strftime('%Y-%m-%d', Order.order_date).label('date'),
-            func.sum(Order.total_amount).label('revenue'),
-            func.count(Order.id).label('orders_count')
-        )
-        .where(Order.order_date >= cutoff)
-        .where(Order.status != 'cancelled')
-        .group_by(func.strftime('%Y-%m-%d', Order.order_date))
-        .order_by('date')
-    )
-
-    results = db.execute(stmt).all()
-    return [{"date": r.date, "revenue": r.revenue or 0.0, "orders_count": r.orders_count} for r in results]
+    return [
+        {
+            # PostgreSQL hands back a date object here, SQLite a 'YYYY-MM-DD'
+            # string; the response schema wants the string form either way.
+            "date": r.date.isoformat() if hasattr(r.date, "isoformat") else str(r.date),
+            "revenue": float(r.revenue or 0.0),
+            "orders_count": r.orders_count,
+        }
+        for r in results
+    ]
 
 
 @router.get(
