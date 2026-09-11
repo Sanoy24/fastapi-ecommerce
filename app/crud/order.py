@@ -168,7 +168,7 @@ class OrderCrud:
 
         region = shipping_address.state or shipping_address.country
         tax_amount = self._calculate_tax_amount(items, region)
-        shipping_amount = self._calculate_shipping_amount(shipping_method_id, shipping_address)
+        shipping_amount = self._calculate_shipping_amount(shipping_method_id, shipping_address, raw_subtotal)
 
         total_amount = max(0.0, raw_subtotal - discount + tax_amount + shipping_amount)
 
@@ -290,10 +290,14 @@ class OrderCrud:
 
         return round(tax_amount, 2)
 
-    def _calculate_shipping_amount(self, shipping_method_id: int | None, shipping_address) -> float:
+    def _calculate_shipping_amount(self, shipping_method_id: int | None, shipping_address, raw_subtotal: float) -> float:
         from app.models.shipping import ShippingMethod, ShippingZone, ShippingRate
+        from app.services.pricing import qualifies_for_free_shipping
 
         if not shipping_method_id:
+            return 0.0
+
+        if qualifies_for_free_shipping(self.db, raw_subtotal):
             return 0.0
 
         method = self.db.execute(

@@ -20,3 +20,18 @@ class Promotion(Base):
     starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    @property
+    def is_valid(self) -> bool:
+        """Mirrors Coupon.is_valid. Previously nothing checked starts_at/
+        ends_at at all — app.services.pricing.calculate_promotion_discount
+        only filtered on is_active, so a promotion scheduled for the future
+        (or already expired) applied at checkout today regardless."""
+        if not self.is_active:
+            return False
+        now = datetime.now()
+        if self.starts_at and now < self.starts_at:
+            return False
+        if self.ends_at and now > self.ends_at:
+            return False
+        return True
