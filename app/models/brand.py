@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from datetime import datetime
 from app.db.database import Base
+from app.utils.time import utcnow
 
 class Brand(Base):
     __tablename__ = "brands"
@@ -11,4 +11,4 @@ class Brand(Base):
     logo_url = Column(String(255), nullable=True)
     description = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)

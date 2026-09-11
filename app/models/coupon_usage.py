@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from app.db.database import Base
+from app.utils.time import utcnow
 
 class CouponUsage(Base):
     __tablename__ = "coupon_usages"
@@ -10,7 +10,7 @@ class CouponUsage(Base):
     coupon_id = Column(Integer, ForeignKey("coupons.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
-    used_at = Column(DateTime, default=datetime.utcnow)
+    used_at = Column(DateTime, default=utcnow)
 
     coupon = relationship("Coupon")
     user = relationship("User")

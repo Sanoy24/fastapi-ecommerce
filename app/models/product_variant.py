@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Numeric, JSON
-from datetime import datetime
 from app.db.database import Base
+from app.utils.time import utcnow
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 
@@ -15,7 +15,7 @@ class ProductVariant(Base):
     stock_quantity = Column(Integer, default=0)
     attributes = Column(JSON, nullable=True) # e.g. {"color": "Red", "size": "XL"}
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     product = relationship("Product", back_populates="variants")
     reservations = relationship(
@@ -36,7 +36,7 @@ class ProductVariant(Base):
         """
         if not self.reservations:
             return int(self.stock_quantity)
-        now = datetime.utcnow()
+        now = utcnow()
         active_reservations_qty = sum(
             res.quantity for res in self.reservations if res.expires_at > now
         )

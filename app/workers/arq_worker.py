@@ -1,11 +1,12 @@
 import asyncio
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from arq.connections import RedisSettings
 from arq.cron import cron
 from app.core.logger import logger
 from app.db.database import SessionLocal
 from app.models.outbox_event import OutboxEvent
+from app.utils.time import utcnow
 from sqlalchemy import select, func, delete
 
 # Previously this function existed but was never added to WorkerSettings
@@ -22,10 +23,6 @@ MAX_OUTBOX_ATTEMPTS = 5
 # they're old enough to be uninteresting for debugging, `_cleanup` removes
 # them so the table doesn't grow forever holding rows nothing reads anymore.
 OUTBOX_COMPLETED_RETENTION = timedelta(days=30)
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _backoff_delay(attempt: int) -> timedelta:
@@ -63,7 +60,7 @@ async def process_outbox_events_task(ctx):
     # but ARQ functions are async.
     # For now, we'll run it directly as this worker will block for DB operations.
     def _process():
-        now = _utcnow()
+        now = utcnow()
         with SessionLocal() as db:
             events = (
                 db.execute(
@@ -124,7 +121,7 @@ async def cleanup_completed_outbox_events_task(ctx):
     logger.info("Starting outbox cleanup")
 
     def _process():
-        cutoff = _utcnow() - OUTBOX_COMPLETED_RETENTION
+        cutoff = utcnow() - OUTBOX_COMPLETED_RETENTION
         with SessionLocal() as db:
             result = db.execute(
                 delete(OutboxEvent).where(
@@ -190,10 +187,9 @@ async def detect_abandoned_carts_task(ctx):
     def _process():
         from app.models.cart import Cart
         from app.models.user import User
-        import datetime
 
-        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-        cutoff = now - datetime.timedelta(hours=24)
+        now = utcnow()
+        cutoff = now - timedelta(hours=24)
 
         with SessionLocal() as db:
             carts = (

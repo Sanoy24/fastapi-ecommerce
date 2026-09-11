@@ -2,6 +2,7 @@ from sqlalchemy import Integer, ForeignKey, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from app.db.database import Base
+from app.utils.time import utcnow
 from sqlalchemy import Index
 
 class InventoryReservation(Base):
@@ -45,4 +46,4 @@ class InventoryReservation(Base):
 
     @property
     def is_expired(self) -> bool:
-        return datetime.utcnow() > self.expires_at
+        return utcnow() > self.expires_at
