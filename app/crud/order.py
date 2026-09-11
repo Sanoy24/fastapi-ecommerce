@@ -54,8 +54,8 @@ class OrderCrud:
                 )
                 if not variant:
                     raise OrderException(f"Variant not found: {item.variant_id}")
-                if variant.stock_quantity < item.quantity:
-                    raise OrderException(f"Not enough stock for variant. Available: {variant.stock_quantity}")
+                if variant.available_stock < item.quantity:
+                    raise OrderException(f"Not enough stock for variant. Available: {variant.available_stock}")
             else:
                 product = (
                     self.db.execute(
@@ -209,9 +209,13 @@ class OrderCrud:
             )
             self.db.add(order_item)
 
-            # Create inventory reservation instead of direct deduction
+            # Create inventory reservation instead of direct deduction.
+            # variant_id is set for variant items so the reservation is
+            # scoped to the variant's own stock pool, not the parent product's
+            # — see ProductVariant.available_stock / Product.available_stock.
             reservation = InventoryReservation(
                 product_id=item.product_id,
+                variant_id=item.variant_id,
                 user_id=user_id,
                 quantity=item.quantity,
                 expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15)
@@ -222,6 +226,7 @@ class OrderCrud:
             qty_before = item.variant.stock_quantity if item.variant_id and item.variant else item.product.stock_quantity
             inv_tx = InventoryTransaction(
                 product_id=item.product_id,
+                variant_id=item.variant_id,
                 order_id=order.id,
                 transaction_type="reservation",
                 quantity_change=0,  # stock_quantity doesn't change yet, but available_stock effectively does

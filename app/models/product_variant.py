@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Numeric, JSON
 from datetime import datetime
 from app.db.database import Base
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 
 class ProductVariant(Base):
@@ -17,7 +18,26 @@ class ProductVariant(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     product = relationship("Product", back_populates="variants")
+    reservations = relationship(
+        "InventoryReservation", back_populates="variant", cascade="all, delete-orphan"
+    )
 
     # Relationships for future use
     # cart_items = relationship("CartItem", back_populates="variant")
     # order_items = relationship("OrderItem", back_populates="variant")
+
+    @hybrid_property
+    def available_stock(self) -> int:
+        """Stock quantity minus this variant's own active reservations.
+
+        A variant's stock_quantity is a separate pool from its parent
+        product's — see Product.available_stock, which excludes
+        variant-scoped reservations for the same reason.
+        """
+        if not self.reservations:
+            return int(self.stock_quantity)
+        now = datetime.utcnow()
+        active_reservations_qty = sum(
+            res.quantity for res in self.reservations if res.expires_at > now
+        )
+        return int(self.stock_quantity) - active_reservations_qty

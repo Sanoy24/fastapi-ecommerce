@@ -113,10 +113,29 @@ class PaymentService:
                 order.payment_status = "success"
                 order.status = "paid"
 
-                # Deduct stock and clear reservations
+                # Deduct stock and clear reservations. A variant item deducts
+                # from the variant's own stock_quantity, not the parent
+                # product's — they're separate pools (see
+                # ProductVariant.available_stock).
                 for item in order.order_items:
-                    product = item.product
-                    if product:
+                    if item.variant_id and item.variant:
+                        variant = item.variant
+                        old_qty = variant.stock_quantity
+                        variant.stock_quantity -= item.quantity
+
+                        inv_tx = InventoryTransaction(
+                            product_id=item.product_id,
+                            variant_id=variant.id,
+                            order_id=order.id,
+                            transaction_type="deduction",
+                            quantity_change=-item.quantity,
+                            quantity_before=old_qty,
+                            quantity_after=variant.stock_quantity,
+                            note=f"Stock deducted after successful payment for order {order.order_number}"
+                        )
+                        self.db.add(inv_tx)
+                    elif item.product:
+                        product = item.product
                         old_qty = product.stock_quantity
                         product.stock_quantity -= item.quantity
 
