@@ -4,13 +4,13 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.models.cart import Cart
-from app.models.cart_item import CartItem
 from app.models.coupon import Coupon
 from app.schema.cart_schema import CartItemCreate, CartItemUpdate
 from app.core.logger import logger
 from app.core.exceptions import ProductException
 from app.crud.product import ProductCrud
 from app.crud.cart_item import CartCrud
+from app.services.pricing import calculate_coupon_discount, calculate_promotion_discount, get_unit_price
 
 
 class CartService:
@@ -86,73 +86,24 @@ class CartService:
 
     def get_cart_details(self, cart: Cart):
         items = []
-        def _get_price(item: CartItem) -> float:
-            if item.variant_id and item.variant:
-                return float(item.variant.price)
-            return float(item.product.price)
 
-        raw_subtotal = sum(item.quantity * _get_price(item) for item in cart.cart_items)
-        subtotal = raw_subtotal
+        raw_subtotal = sum(item.quantity * get_unit_price(item) for item in cart.cart_items)
 
         coupon = cart.coupon
         if cart.coupon_id and not coupon:
             from app.models.coupon import Coupon
             coupon = self.db.execute(select(Coupon).where(Coupon.id == cart.coupon_id)).scalar_one_or_none()
 
-        if coupon:
-            if coupon.is_valid and (coupon.min_order_value is None or raw_subtotal >= float(coupon.min_order_value)):
-                if coupon.discount_type == "percentage":
-                    discount = raw_subtotal * (float(coupon.discount_value) / 100)
-                    subtotal -= discount
-                elif coupon.discount_type == "fixed":
-                    subtotal -= float(coupon.discount_value)
+        coupon_discount = calculate_coupon_discount(raw_subtotal, coupon)
+        promo_discount, applied_promotions = calculate_promotion_discount(self.db, list(cart.cart_items))
 
-            if subtotal < 0:
-                subtotal = 0.0
-
-        # Evaluate Promotions
-        from app.models.promotion import Promotion
-        active_promotions = self.db.scalars(
-            select(Promotion).where(Promotion.is_active)
-        ).all()
-
-        applied_promotions = []
-        for promo in active_promotions:
-            if promo.type == "percentage_on_category" and promo.conditions and promo.rewards:
-                target_cat = promo.conditions.get("category_id")
-                discount_pct = promo.rewards.get("discount_percentage", 0)
-                if target_cat and discount_pct:
-                    for item in cart.cart_items:
-                        if item.product.category_id == target_cat:
-                            price = _get_price(item)
-                            discount = (price * item.quantity) * (discount_pct / 100)
-                            subtotal -= discount
-                            applied_promotions.append(promo.name)
-
-            elif promo.type == "buy_x_get_y" and promo.conditions and promo.rewards:
-                target_prod = promo.conditions.get("product_id")
-                buy_qty = promo.conditions.get("buy_quantity", 1)
-                get_qty = promo.rewards.get("get_quantity", 1)
-                if target_prod:
-                    for item in cart.cart_items:
-                        if item.product_id == target_prod and item.quantity >= buy_qty:
-                            # Simplification: discount the get_qty
-                            price = _get_price(item)
-                            discount_sets = item.quantity // (buy_qty + get_qty)
-                            if discount_sets == 0 and item.quantity > buy_qty:
-                                discount_sets = 1
-                            discount = discount_sets * get_qty * price
-                            subtotal -= discount
-                            applied_promotions.append(promo.name)
-
-        if subtotal < 0:
-            subtotal = 0.0
+        subtotal = max(0.0, raw_subtotal - coupon_discount - promo_discount)
 
         total_items = sum(item.quantity for item in cart.cart_items)
 
         for item in cart.cart_items:
             product = item.product
-            price = _get_price(item)
+            price = get_unit_price(item)
             item_sub = price * item.quantity
 
             name = product.name
@@ -189,7 +140,7 @@ class CartService:
 
         for item in cart.cart_items:
             product = item.product
-            price = _get_price(item)
+            price = get_unit_price(item)
             item_tax = 0.0
             for tr in tax_rates:
                 if tr.applies_to == "all":
@@ -223,7 +174,7 @@ class CartService:
         if not coupon.is_valid:
             raise HTTPException(status_code=400, detail="Coupon is invalid, expired, or usage limit reached")
 
-        raw_subtotal = sum(item.quantity * float(item.product.price) for item in cart.cart_items)
+        raw_subtotal = sum(item.quantity * get_unit_price(item) for item in cart.cart_items)
         if coupon.min_order_value and raw_subtotal < float(coupon.min_order_value):
             raise HTTPException(status_code=400, detail=f"Minimum order value of {coupon.min_order_value} required")
 

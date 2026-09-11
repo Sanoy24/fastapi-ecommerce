@@ -18,6 +18,7 @@ from app.core.exceptions import OrderException
 from app.models.user import User
 from app.utils.order_utils import generate_order_number, generate_trx_ref
 from app.crud.address import AddressCrud
+from app.services.pricing import calculate_coupon_discount, calculate_promotion_discount, get_unit_price
 
 
 class OrderCrud:
@@ -80,12 +81,8 @@ class OrderCrud:
         self.validate_stock(items)
 
         cart = items[0].cart
-        def _get_price(i: CartItem) -> float:
-            if i.variant_id and i.variant:
-                return float(i.variant.price)
-            return float(i.product.price)
 
-        raw_subtotal = sum(_get_price(i) * i.quantity for i in items)
+        raw_subtotal = sum(get_unit_price(i) * i.quantity for i in items)
         subtotal = float(raw_subtotal)
         discount = 0.0
 
@@ -99,11 +96,12 @@ class OrderCrud:
             if usage:
                 raise OrderException("You have already used this coupon.")
 
-            if cart.coupon.min_order_value is None or subtotal >= float(cart.coupon.min_order_value):
-                if cart.coupon.discount_type == "percentage":
-                    discount = subtotal * (float(cart.coupon.discount_value) / 100)
-                elif cart.coupon.discount_type == "fixed":
-                    discount = float(cart.coupon.discount_value)
+            discount += calculate_coupon_discount(subtotal, cart.coupon)
+
+        # Promotions applied at checkout must match what was shown in the cart —
+        # see CartService.get_cart_details, which uses the same helper.
+        promo_discount, _applied_promotions = calculate_promotion_discount(self.db, list(items))
+        discount += promo_discount
 
         def _address_dict(addr):
             return {
@@ -123,7 +121,7 @@ class OrderCrud:
 
         for item in items:
             product = item.product
-            price = _get_price(item)
+            price = get_unit_price(item)
 
             # Find applicable tax rates for this item
             stmt = select(TaxRate).where(TaxRate.is_active)
@@ -201,7 +199,7 @@ class OrderCrud:
 
         # Create order items + reserve stock
         for item in items:
-            price = _get_price(item)
+            price = get_unit_price(item)
             order_item = OrderItem(
                 order_id=order.id,
                 product_id=item.product_id,
