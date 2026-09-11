@@ -79,3 +79,69 @@ jobs:
           poetry install --no-interaction --no-ansi
           poetry export -f requirements.txt --output requirements.txt --without-hashes
           pip-audit -r requirements.txt
+
+  migrations:
+    runs-on: ubuntu-latest
+    # Verifies the migration chain actually bootstraps a database from
+    # nothing. A previous version of this chain could only ever be applied
+    # to a database that already had its base schema created some other
+    # way — `alembic upgrade head` failed immediately against a genuinely
+    # empty database. Every PR now proves the chain still works end to end.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fresh_migration_check
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry config virtualenvs.create false
+          poetry install --no-interaction --no-ansi
+      - name: Run alembic upgrade head against a brand-new empty database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fresh_migration_check
+          JWT_SECRET_KEY: test_secret_key_at_least_32_characters_long
+        run: |
+          sed -i "s#sqlalchemy.url = .*#sqlalchemy.url = ${DATABASE_URL}#" alembic.ini
+          alembic upgrade head
+
+  docker-build:
+    runs-on: ubuntu-latest
+    # Verifies the Dockerfile actually builds and produces a working,
+    # non-root image. Caught a real bug this way during development: /app
+    # stayed root-owned (WORKDIR creates it before COPY --chown runs), so
+    # the app couldn't create its own logs/ directory at import time.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t fastapi-ecommerce:ci .
+      - name: Verify the container runs as a non-root user
+        run: |
+          user="$(docker run --rm fastapi-ecommerce:ci whoami)"
+          echo "Container user: $user"
+          if [ "$user" = "root" ]; then
+            echo "::error::Container runs as root"
+            exit 1
+          fi
+      - name: Verify the app can actually start inside the image
+        run: |
+          docker run --rm \
+            -e JWT_SECRET_KEY=test_secret_key_at_least_32_characters_long \
+            -e DATABASE_URL=postgresql://postgres:postgres@localhost:5432/ecommerce \
+            fastapi-ecommerce:ci python -c "import app.main; print('app imports cleanly')"
