@@ -1,16 +1,60 @@
 import asyncio
 import os
+from datetime import datetime, timedelta, timezone
 from arq.connections import RedisSettings
 from arq.cron import cron
 from app.core.logger import logger
 from app.db.database import SessionLocal
 from app.models.outbox_event import OutboxEvent
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
+
+# Previously this function existed but was never added to WorkerSettings
+# below, so no pending OutboxEvent row was ever processed — every order
+# wrote one and it sat at "pending" forever. Registering it is the fix;
+# everything else here (retry/backoff, cleanup) is what makes that
+# registration actually safe to leave running unattended.
+
+# After this many failed publish attempts, an event is given up on and
+# marked "failed" for good instead of being retried again.
+MAX_OUTBOX_ATTEMPTS = 5
+
+# Completed events are the durable record that a publish happened; once
+# they're old enough to be uninteresting for debugging, `_cleanup` removes
+# them so the table doesn't grow forever holding rows nothing reads anymore.
+OUTBOX_COMPLETED_RETENTION = timedelta(days=30)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _backoff_delay(attempt: int) -> timedelta:
+    """Exponential backoff: 2, 4, 8, 16, 32 minutes, capped at 1 hour."""
+    return timedelta(minutes=min(2**attempt, 60))
+
+
+def _publish_event(event: OutboxEvent) -> None:
+    """
+    Publish one outbox event to the downstream broker.
+
+    This app has no message broker wired up, so publishing is simulated by
+    logging — this is the one function to swap out for a real client
+    (Kafka, RabbitMQ, SNS, ...) when one exists. The retry/backoff
+    bookkeeping in process_outbox_events_task doesn't need to change when
+    that happens; it only depends on this function raising on failure.
+    """
+    logger.info(f"Publishing event {event.id} - topic: {event.topic}")
 
 
 async def process_outbox_events_task(ctx):
     """
     Periodic task to process pending outbox events.
+
+    A failure doesn't immediately give up: the event goes back to "pending"
+    with next_attempt_at pushed out by an exponential backoff, and is only
+    marked terminally "failed" after MAX_OUTBOX_ATTEMPTS. Without this, a
+    single transient failure (a broker hiccup, a network blip) would strand
+    an event with no automatic path back to being processed.
     """
     logger.info("Starting outbox event processing")
 
@@ -19,12 +63,25 @@ async def process_outbox_events_task(ctx):
     # but ARQ functions are async.
     # For now, we'll run it directly as this worker will block for DB operations.
     def _process():
+        now = _utcnow()
         with SessionLocal() as db:
             events = (
                 db.execute(
                     select(OutboxEvent)
-                    .where(OutboxEvent.status == "pending")
+                    .where(
+                        OutboxEvent.status == "pending",
+                        (OutboxEvent.next_attempt_at.is_(None))
+                        | (OutboxEvent.next_attempt_at <= now),
+                    )
+                    .order_by(OutboxEvent.created_at)
                     .limit(50)
+                    # skip_locked lets multiple worker instances poll the
+                    # same table concurrently without either blocking on or
+                    # double-processing a row another worker already picked
+                    # up — the reason this suite now runs on real
+                    # PostgreSQL rather than SQLite is to be able to prove
+                    # that guarantee actually holds (see
+                    # tests/test_outbox_worker.py).
                     .with_for_update(skip_locked=True)
                 )
                 .scalars()
@@ -33,13 +90,26 @@ async def process_outbox_events_task(ctx):
 
             for event in events:
                 try:
-                    logger.info(f"Publishing event {event.id} - topic: {event.topic}")
-                    # Simulate publishing to Kafka/RabbitMQ
+                    _publish_event(event)
                     event.status = "completed"
                     event.processed_at = func.now()
                 except Exception as e:
-                    logger.error(f"Failed to process outbox event {event.id}: {e}")
-                    event.status = "failed"
+                    event.retry_count += 1
+                    if event.retry_count >= MAX_OUTBOX_ATTEMPTS:
+                        logger.error(
+                            f"Outbox event {event.id} failed permanently after "
+                            f"{event.retry_count} attempts: {e}"
+                        )
+                        event.status = "failed"
+                        event.next_attempt_at = None
+                    else:
+                        delay = _backoff_delay(event.retry_count)
+                        logger.warning(
+                            f"Outbox event {event.id} failed (attempt "
+                            f"{event.retry_count}/{MAX_OUTBOX_ATTEMPTS}), retrying "
+                            f"in {delay}: {e}"
+                        )
+                        event.next_attempt_at = now + delay
                     event.error_message = str(e)
             db.commit()
 
@@ -47,6 +117,27 @@ async def process_outbox_events_task(ctx):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _process)
     logger.info("Finished outbox event processing")
+
+
+async def cleanup_completed_outbox_events_task(ctx):
+    """Delete completed outbox events older than the retention window."""
+    logger.info("Starting outbox cleanup")
+
+    def _process():
+        cutoff = _utcnow() - OUTBOX_COMPLETED_RETENTION
+        with SessionLocal() as db:
+            result = db.execute(
+                delete(OutboxEvent).where(
+                    OutboxEvent.status == "completed",
+                    OutboxEvent.processed_at < cutoff,
+                )
+            )
+            db.commit()
+            return result.rowcount
+
+    loop = asyncio.get_running_loop()
+    deleted = await loop.run_in_executor(None, _process)
+    logger.info(f"Finished outbox cleanup — removed {deleted} completed event(s)")
 
 
 async def send_order_confirmation_email_task(
@@ -149,10 +240,17 @@ class WorkerSettings:
         send_password_reset_email_task,
         send_verification_email_task,
         detect_abandoned_carts_task,
+        process_outbox_events_task,
+        cleanup_completed_outbox_events_task,
     ]
 
     cron_jobs = [
-        cron(detect_abandoned_carts_task, hour={0, 12}, minute=0)  # run twice a day
+        cron(detect_abandoned_carts_task, hour={0, 12}, minute=0),  # run twice a day
+        # Twice a minute: the outbox pattern's whole point is a business
+        # transaction and its side effect committing together, so the
+        # side effect (here, simulated) should follow close behind.
+        cron(process_outbox_events_task, second={0, 30}),
+        cron(cleanup_completed_outbox_events_task, hour=3, minute=0),  # once a day
     ]
     redis_settings = RedisSettings(host=host, port=port, database=database)
     on_startup = startup
