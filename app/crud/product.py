@@ -156,8 +156,16 @@ class ProductCrud:
         else:
             stmt = stmt.order_by(sort_field.asc())  # type: ignore[attr-defined]
 
-        # Count total items matching filters
-        count_stmt = stmt.with_only_columns(func.count())
+        # Count total items matching filters.
+        # order_by(None) drops the ORDER BY before counting: `stmt` carries
+        # an ORDER BY on a plain column (or, for "popularity", a correlated
+        # subquery) alongside a bare `count()` with no GROUP BY. SQLite
+        # tolerates that combination silently; PostgreSQL rejects it —
+        # "column must appear in the GROUP BY clause or be used in an
+        # aggregate function" — since the ordering would be ambiguous for a
+        # single-row aggregate result. The order is meaningless for a count
+        # anyway, so dropping it is correct on top of being required.
+        count_stmt = stmt.order_by(None).with_only_columns(func.count())
         total_items = self.db.scalar(count_stmt) or 0
 
         # Pagination
