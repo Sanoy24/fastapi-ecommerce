@@ -39,12 +39,12 @@ class AddressCrud:
         db_address = self.db.query(Address).filter(Address.id == address_id).first()
         return db_address
 
-    def delete_address(self, address_id: int) -> bool:
+    def delete_address(self, user_id: int, address_id: int) -> bool:
         """
-        Delete an address by ID
+        Delete an address by ID, scoped to its owner
         """
         db_address = self.db.query(Address).filter(Address.id == address_id).first()
-        if not db_address:
+        if not db_address or db_address.user_id != user_id:
             return False
         self.db.delete(db_address)
         self.db.commit()
