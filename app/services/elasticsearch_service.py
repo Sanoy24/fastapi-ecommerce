@@ -10,6 +10,7 @@ from elasticsearch import (
 from fastapi import HTTPException, status
 
 from app.core.logger import logger
+from app.schema.search_schema import ProductElasticSearchRequest
 
 
 class ElasticService:
@@ -44,6 +45,41 @@ class ElasticService:
         except Exception:
             logger.exception("Unexpected error during Elasticsearch ping")
             raise HTTPException(status_code=500, detail="Internal Elasticsearch error")
+
+    @staticmethod
+    def _build_product_query(params: ProductElasticSearchRequest) -> Dict[str, Any]:
+        """Build a bounded Elasticsearch query from typed, validated search params."""
+        must = [
+            {
+                "multi_match": {
+                    "query": params.q,
+                    "fields": ["name^3", "name.english^2", "description"],
+                    "fuzziness": "AUTO",
+                }
+            }
+        ]
+
+        filters: list[Dict[str, Any]] = []
+        if params.category:
+            filters.append({"term": {"category": params.category}})
+        if params.min_price is not None or params.max_price is not None:
+            price_range: Dict[str, float] = {}
+            if params.min_price is not None:
+                price_range["gte"] = params.min_price
+            if params.max_price is not None:
+                price_range["lte"] = params.max_price
+            filters.append({"range": {"price": price_range}})
+        if params.in_stock_only:
+            filters.append({"term": {"in_stock": True}})
+
+        return {"query": {"bool": {"must": must, "filter": filters}}}
+
+    async def search_products(self, params: ProductElasticSearchRequest):
+        """Search the product index using bounded, server-built DSL — the only
+        entry point client input should reach; never pass a client-supplied
+        query body to search() directly."""
+        query = self._build_product_query(params)
+        return await self.search(query, size=params.size, from_=params.offset)
 
     async def search(
         self,
@@ -98,12 +134,8 @@ class ElasticService:
         except NotFoundError:
             raise HTTPException(status_code=404, detail=f"Index '{index}' not found")
         except RequestError as e:
-
             logger.warning(f"Bad search query: {query} → {e}")
-            error_msg = e.info.get("error", {}).get("reason", str(e))
-            raise HTTPException(
-                status_code=400, detail=f"Invalid search query: {error_msg}"
-            )
+            raise HTTPException(status_code=400, detail="Invalid search query")
         except ConnectionError as e:
             logger.error(f"Elasticsearch connection failed during search: {e}")
             return {

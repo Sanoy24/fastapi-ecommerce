@@ -92,6 +92,27 @@ class ProductSearchParams(BaseModel):
     }
 
 
+class ProductElasticSearchRequest(BaseModel):
+    """
+    Typed request for full-text product search via Elasticsearch.
+
+    Deliberately does not accept a raw Elasticsearch query body — that would
+    let any caller run arbitrary DSL (expensive aggregations, deep pagination,
+    wildcard/script queries) against the cluster. Every field here maps to a
+    bounded, server-built clause instead — see ElasticService.search_products.
+    """
+
+    q: str = Field(min_length=1, max_length=200, description="Search text")
+    category: Optional[str] = Field(default=None, max_length=100, description="Filter by category name")
+    min_price: Optional[float] = Field(default=None, ge=0, description="Minimum price filter")
+    max_price: Optional[float] = Field(default=None, ge=0, description="Maximum price filter")
+    in_stock_only: bool = Field(default=False, description="Only return in-stock products")
+    size: int = Field(default=20, ge=1, le=100, description="Results per page")
+    offset: int = Field(default=0, ge=0, le=10000, description="Result offset for pagination")
+
+    model_config = {"extra": "forbid"}
+
+
 class ProductAutocompleteResponse(BaseModel):
     """Response schema for product autocomplete suggestions."""
 

@@ -23,10 +23,11 @@ def create_coupon(
 @router.get("", response_model=List[CouponPublic])
 def list_coupons(
     coupon_service: coupon_service_dep,
+    admin_user: admin_dep,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
 ):
-    """List all coupons (Public endpoint for viewing available promos, though usually restricted)."""
+    """List all coupons (Admin only)."""
     return coupon_service.list_coupons(skip, limit)
 
 

@@ -36,6 +36,26 @@ def _login(client: TestClient, email: str, password: str) -> str:
 
 
 class TestCoupons:
+    def test_list_coupons_requires_admin(self, client: TestClient, db_session: Session):
+        """
+        Regression test: list_coupons used to have no auth requirement at
+        all, unlike every sibling coupon route — anonymous or non-admin
+        callers could dump every coupon code, including unreleased ones.
+        """
+        _make_admin(db_session)
+        _make_user(db_session)
+
+        anon_resp = client.get("/coupons")
+        assert anon_resp.status_code == 401
+
+        user_token = _login(client, "user_coupon@test.com", "UserCoupon1")
+        user_resp = client.get("/coupons", headers={"Authorization": f"Bearer {user_token}"})
+        assert user_resp.status_code == 403
+
+        admin_token = _login(client, "admin_coupon@test.com", "AdminCoupon1")
+        admin_resp = client.get("/coupons", headers={"Authorization": f"Bearer {admin_token}"})
+        assert admin_resp.status_code == 200
+
     def test_admin_create_coupon(self, client: TestClient, db_session: Session):
         _make_admin(db_session)
         token = _login(client, "admin_coupon@test.com", "AdminCoupon1")
