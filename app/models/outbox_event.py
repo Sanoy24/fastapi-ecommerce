@@ -1,4 +1,4 @@
-from sqlalchemy import String, DateTime, JSON, func, Enum as SQLEnum
+from sqlalchemy import String, DateTime, Integer, JSON, func, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 from typing import Optional
@@ -29,3 +29,11 @@ class OutboxEvent(Base):
         DateTime, default=func.current_timestamp()
     )
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Retry/backoff bookkeeping for the ARQ poller (app/workers/arq_worker.py).
+    # A failed publish attempt goes back to "pending" with next_attempt_at set
+    # to an exponentially-delayed retry time, rather than straight to a
+    # terminal "failed" — that only happens once retry_count reaches the
+    # poller's attempt limit.
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
