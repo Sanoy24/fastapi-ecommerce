@@ -556,6 +556,14 @@ class OrderCrud:
 
             if new_status == "delivered":
                 order.delivered_at = func.current_timestamp()
+                # The Shipment row has its own status/delivered_at — a
+                # tracking view reads those, not Order's copy — and
+                # previously never got updated here at all, so it stayed
+                # stuck at "shipped" forever even after real delivery.
+                for shipment in order.shipments:
+                    if shipment.status == "shipped":
+                        shipment.status = "delivered"
+                        shipment.delivered_at = order.delivered_at
             elif new_status == "cancelled":
                 order.cancelled_at = func.current_timestamp()
         self.db.commit()
