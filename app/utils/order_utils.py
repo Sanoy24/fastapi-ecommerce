@@ -7,7 +7,17 @@ from app.models.product import Product
 
 
 def generate_order_number() -> str:
-    return f"ORD-{datetime.date.today().strftime('%Y%m%d,%H%M%S')}-{str(uuid.uuid4())[:10].upper()}"
+    """ORD-<date>-<time>-<10 random hex chars>, e.g. ORD-20260911-153045-A1B2C3D4E5.
+
+    Was previously built from datetime.date.today(), a date with no time
+    component at all, so '%H%M%S' always rendered as 000000 — every order
+    number read like ORD-20260911,000000-... — plus a stray comma from the
+    format string joining the two directly. Uniqueness was never actually
+    at risk (the random suffix alone makes a collision astronomically
+    unlikely), this only ever affected what a human reading the number saw.
+    """
+    now = datetime.datetime.now()
+    return f"ORD-{now.strftime('%Y%m%d')}-{now.strftime('%H%M%S')}-{str(uuid.uuid4())[:10].upper()}"
 
 
 def generate_trx_ref() -> str:
