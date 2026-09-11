@@ -21,6 +21,32 @@ class AddressSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ShipmentResponse(BaseModel):
+    """The Shipment row's own status/estimated_delivery/delivered_at — a
+    finer-grained view than the tracking_number/shipping_carrier/shipped_at
+    columns duplicated onto Order itself below, and the only place
+    estimated_delivery and a delivered/in_transit/failed status live."""
+    id: int
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
+    status: str
+    shipped_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+    estimated_delivery: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class OrderEventResponse(BaseModel):
+    """One entry in an order's status timeline (placed, paid, shipped, ...)."""
+    from_status: Optional[str] = None
+    to_status: str
+    note: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class OrderResponse(BaseModel):
     id: int
     order_number: str
@@ -42,6 +68,8 @@ class OrderResponse(BaseModel):
     delivered_at: Optional[datetime] = None
 
     order_items: List[OrderItemResponse]
+    shipments: List[ShipmentResponse] = []
+    events: List[OrderEventResponse] = []
 
     model_config = {"from_attributes": True}
 
