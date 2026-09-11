@@ -128,13 +128,20 @@ class Product(Base):
 
     @hybrid_property
     def available_stock(self) -> int:
-        """Calculate available stock (stock_quantity - active reservations)."""
+        """Calculate available stock (stock_quantity - active reservations).
+
+        Only counts reservations against the product's own pool. A variant
+        has its own separate stock_quantity, so reservations scoped to a
+        variant (variant_id is not None) don't consume the product's stock —
+        see ProductVariant.available_stock for that pool instead.
+        """
         if not self.reservations:
             return self.stock_quantity
 
         now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         active_reservations_qty = sum(
-            res.quantity for res in self.reservations if res.expires_at > now
+            res.quantity for res in self.reservations
+            if res.expires_at > now and res.variant_id is None
         )
         return self.stock_quantity - active_reservations_qty
 
