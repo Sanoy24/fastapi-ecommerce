@@ -37,6 +37,10 @@ def init_routes(app: FastAPI):
     app.include_router(router=coupon.router, prefix="/coupons")
     app.include_router(router=promotion.router, prefix="/promotions")
     app.include_router(router=audit.router, prefix="/audit")
-    app.include_router(router=tax_rate.router, prefix="/tax-rates")
+    # No prefix here: tax_rate.router already declares
+    # prefix="/admin/tax-rates" on itself (same pattern as
+    # shipping.admin_router below) — adding one here doubled up to
+    # /tax-rates/admin/tax-rates/... for every route in that file.
+    app.include_router(router=tax_rate.router)
     app.include_router(router=shipping.router)
     app.include_router(router=shipping.admin_router)
