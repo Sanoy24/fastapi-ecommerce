@@ -1,7 +1,7 @@
 """Add AuditLog and Performance Indexes
 
 Revision ID: e71d0e330657
-Revises: 
+Revises: 163fcf903f0c
 Create Date: 2026-08-25 23:23:20.359397
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'e71d0e330657'
-down_revision: Union[str, Sequence[str], None] = None
+down_revision: Union[str, Sequence[str], None] = '163fcf903f0c'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
