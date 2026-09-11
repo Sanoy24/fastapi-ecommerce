@@ -58,7 +58,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_ecommerce
           REDIS_URL: redis://localhost:6379/0
-          JWT_SECRET_KEY: test_secret
+          JWT_SECRET_KEY: test_secret_key_at_least_32_characters_long
           STRIPE_SECRET_KEY: test_stripe
           STRIPE_WEBHOOK_SECRET: test_webhook
         run: pytest tests/ -v --cov=app
