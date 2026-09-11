@@ -362,12 +362,9 @@ class UserService:
         from app.utils.totp import verify_totp
         from app.utils import security
         try:
-            payload = security.decode_access_token(challenge_token)
+            payload = security.decode_challenge_token(challenge_token)
         except TokenError:
             raise HTTPException(status_code=401, detail="Invalid or expired challenge token.")
-
-        if payload.get("type") != "mfa_challenge":
-            raise HTTPException(status_code=401, detail="Invalid token type.")
 
         user_id = payload.get("sub")
         if not user_id:

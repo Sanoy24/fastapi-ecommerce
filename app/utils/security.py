@@ -47,8 +47,8 @@ def create_token(
 
     expiration_time = now + expiration
     payload = {
-        **data,
         "type": "access",
+        **data,
         "iat": int(now.timestamp()),
         "exp": int(expiration_time.timestamp()),
     }
@@ -94,6 +94,28 @@ def create_refresh_token(user_id: int) -> str:
     )
 
 
+def _decode_signed_token(token: str, expired_message: str, invalid_message: str, malformed_message: str) -> Dict[str, Any]:
+    """
+    Verify a JWT's signature and expiry and return its payload, without checking
+    its 'type' claim. Callers must check 'type' themselves — see decode_access_token,
+    decode_refresh_token, and decode_challenge_token, each of which allowlists the
+    single type it accepts rather than denylisting the types it rejects.
+    """
+    try:
+        return jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            options={"verify_signature": True, "verify_exp": True},
+        )
+    except ExpiredSignatureError:
+        raise TokenError(expired_message)
+    except InvalidTokenError:
+        raise TokenError(invalid_message)
+    except jwt.DecodeError:
+        raise TokenError(malformed_message)
+
+
 def decode_access_token(token: str) -> Dict[str, Any]:
     """
     Verify and decode a JWT access token.
@@ -105,24 +127,12 @@ def decode_access_token(token: str) -> Dict[str, Any]:
         Decoded payload as dict.
 
     Raises:
-        TokenError: If token is invalid, expired, malformed, or is a refresh token.
+        TokenError: If token is invalid, expired, malformed, or is not an access token.
     """
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
-            options={"verify_signature": True, "verify_exp": True},
-        )
-        if payload.get("type") == "refresh":
-            raise TokenError("Refresh token cannot be used as an access token")
-        return payload
-    except ExpiredSignatureError:
-        raise TokenError("Token has expired")
-    except InvalidTokenError:
-        raise TokenError("Invalid token")
-    except jwt.DecodeError:
-        raise TokenError("Malformed token")
+    payload = _decode_signed_token(token, "Token has expired", "Invalid token", "Malformed token")
+    if payload.get("type") != "access":
+        raise TokenError("Token is not a valid access token")
+    return payload
 
 
 def decode_refresh_token(token: str) -> Dict[str, Any]:
@@ -136,22 +146,40 @@ def decode_refresh_token(token: str) -> Dict[str, Any]:
         Decoded payload as dict (contains 'sub', 'jti').
 
     Raises:
-        TokenError: If the token is invalid, expired, or is an access token.
+        TokenError: If the token is invalid, expired, or is not a refresh token.
     """
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
-            options={"verify_signature": True, "verify_exp": True},
-        )
-        if payload.get("type") != "refresh":
-            raise TokenError("Access token cannot be used as a refresh token")
-        return payload
-    except ExpiredSignatureError:
-        raise TokenError("Refresh token has expired — please log in again")
-    except InvalidTokenError:
-        raise TokenError("Invalid refresh token")
-    except jwt.DecodeError:
-        raise TokenError("Malformed refresh token")
+    payload = _decode_signed_token(
+        token,
+        "Refresh token has expired — please log in again",
+        "Invalid refresh token",
+        "Malformed refresh token",
+    )
+    if payload.get("type") != "refresh":
+        raise TokenError("Access token cannot be used as a refresh token")
+    return payload
+
+
+def decode_challenge_token(token: str) -> Dict[str, Any]:
+    """
+    Verify and decode a short-lived MFA challenge token issued between password
+    verification and second-factor verification.
+
+    Args:
+        token: The JWT challenge token string.
+
+    Returns:
+        Decoded payload as dict (contains 'sub').
+
+    Raises:
+        TokenError: If the token is invalid, expired, or is not an MFA challenge token.
+    """
+    payload = _decode_signed_token(
+        token,
+        "Challenge token has expired",
+        "Invalid challenge token",
+        "Malformed challenge token",
+    )
+    if payload.get("type") != "mfa_challenge":
+        raise TokenError("Token is not a valid MFA challenge token")
+    return payload
 

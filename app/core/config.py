@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
@@ -5,7 +6,9 @@ from typing import List
 class Setting(BaseSettings):
     Database_url: str = "postgresql://postgres:postgres@localhost:5432/ecommerce"
     JWT_ALGORITHM: str = "HS256"
-    JWT_SECRET_KEY: str = ""
+    # No default: an empty/unset signing key would let anyone forge tokens by
+    # HMAC-signing with "". min_length guards against trivially weak secrets too.
+    JWT_SECRET_KEY: str = Field(..., min_length=32)
     JWT_DEFAULT_EXP_MINUTES: int = 30
     JWT_REFRESH_EXP_DAYS: int = 7
     STRIPE_SECRET_KEY: str = ""
