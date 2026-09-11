@@ -1,0 +1,45 @@
+# Version control
+.git
+.gitignore
+
+# Python
+venv
+__pycache__
+*.py[codz]
+*.pyo
+*.egg-info
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.coverage
+htmlcov
+
+# Environment / secrets
+.env
+.env.example
+
+# Local runtime artifacts
+logs
+uploads
+*.db
+
+# Tests — not needed at runtime
+tests
+
+# Unrelated project content — not part of the API image
+frontend
+grafana
+grafana-datasources.yml
+otel-collector-config.yml
+loki-config.yml
+tempo.yml
+prometheus.yml
+docker-compose.yml
+Dockerfile
+.dockerignore
+.github
+
+# Docs / scratch notes
+*.md
+datamodel.txt
+DDL.sql
