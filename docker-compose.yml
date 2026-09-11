@@ -119,7 +119,7 @@ services:
       - ./loki-config.yml:/etc/loki/local-config.yaml
 
   tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:3.0.0
     container_name: tempo
     command: [ "-config.file=/etc/tempo.yaml" ]
     volumes:
