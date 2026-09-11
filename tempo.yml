@@ -10,18 +10,6 @@ distributor:
         grpc:
           endpoint: 0.0.0.0:4317
 
-ingester:
-  max_block_duration: 5m               # cut the head block when it hits this size or ...
-  max_block_bytes: 100000000           # ... when it hits this size
-  trace_idle_period: 10s               #  ... or after not receiving any traces for this long
-
-compactor:
-  compaction:
-    compaction_window: 1h              # blocks in this time window will be compacted together
-    max_block_bytes: 100000000         # maximum size of compacted blocks
-    block_retention: 1h
-    compacted_block_retention: 10m
-
 storage:
   trace:
     backend: local                     # backend configuration to use
