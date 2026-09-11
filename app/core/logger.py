@@ -69,7 +69,14 @@ if "pytest" not in sys.modules:
             tags={"job": "fastapi-app"},
             version="1",
         )
-        logger.add(LokiSink(loki_handler), level="INFO")
+        # enqueue=True (already used by both handlers above) moves the
+        # sink call onto loguru's background thread. Without it, every
+        # single log line — including the one LoggingMiddleware writes for
+        # every HTTP request — synchronously performed the Loki push's
+        # network I/O inline: request latency tracked Loki's
+        # availability/response time directly, and a slow or unreachable
+        # Loki made every request in the app slow.
+        logger.add(LokiSink(loki_handler), level="INFO", enqueue=True)
     except Exception as e:
         # Fallback if Loki is not available or lib is missing
         print(f"Failed to initialize Loki handler: {e}")
