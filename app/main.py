@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.v1.init_routes import init_routes
 from app.core.config import settings
-from app.core.elastic_config import close_es_client, get_es_client
+from app.core.elastic_config import close_es_client, connect_es_client_with_retries
 from app.core.logger import logger
 
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -62,22 +62,37 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Start the reservation cleanup background task
     cleanup_task = asyncio.create_task(cleanup_expired_reservations_loop())
 
-    client = None
-    try:
-        client = await get_es_client()
-        logger.info("Elasticsearch client initialized successfully")
+    # Elasticsearch: connect (with retry) and warm the index in the
+    # background instead of blocking startup on it. This used to be
+    # awaited directly here, so the app couldn't serve a single request
+    # until it finished — up to ~50s (10 retries, 5s apart) whenever
+    # Elasticsearch wasn't immediately reachable, the common case right
+    # after `docker-compose up`. Search-related routes just stay
+    # unavailable (they already tolerate a None client) until this
+    # finishes; nothing else in the app depends on it.
+    async def _init_elasticsearch() -> None:
+        try:
+            client = await connect_es_client_with_retries()
+            if client is not None:
+                await create_product_index(client)
+                await bulk_index_products(client)
+        except Exception as e:
+            logger.warning(
+                f"Failed to initialize Elasticsearch client or index products: {e}. App will continue without ES."
+            )
 
-        if client is not None:
-            await create_product_index(client)
-            await bulk_index_products(client)
-    except Exception as e:
-        logger.warning(
-            f"Failed to initialize Elasticsearch client or index products: {e}. App will continue without ES."
-        )
+    es_init_task = asyncio.create_task(_init_elasticsearch())
+
     yield
     cleanup_task.cancel()
     try:
         await cleanup_task
+    except asyncio.CancelledError:
+        pass
+
+    es_init_task.cancel()
+    try:
+        await es_init_task
     except asyncio.CancelledError:
         pass
 
