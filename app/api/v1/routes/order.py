@@ -92,29 +92,9 @@ def cancel_order(
     """Cancel a pending order and restore product stock."""
     return order_service.cancel_order(user_id=current_user.id, order_id=order_id)
 
-class RefundRequest(BaseModel):
-    amount: float
-    reason: str
-
-@router.post("/{order_id}/refund")
-def request_refund(
-    order_id: int,
-    request: RefundRequest,
-    db: Session = Depends(get_db),
-    current_user: UserPublic = Depends(get_current_user)
-):
-    """
-    Request a refund for an order.
-    """
-    from app.services.payment_service import PaymentService
-    payment_service = PaymentService(db)
-    return payment_service.refund_payment(
-        order_id=order_id,
-        user_id=current_user.id,
-        amount=request.amount,
-        reason=request.reason,
-        is_admin=False
-    )
+# Refunds are admin-only — see POST /admin/orders/{order_id}/refund. Customers
+# request a refund by filing a return via POST /{order_id}/return below, which
+# an admin then approves and refunds through the admin endpoint.
 
 class ReturnItem(BaseModel):
     order_item_id: int

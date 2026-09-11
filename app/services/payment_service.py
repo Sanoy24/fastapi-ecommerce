@@ -159,8 +159,14 @@ class PaymentService:
 
                 self.db.commit()
 
-    def refund_payment(self, order_id: int, user_id: int, amount: float, reason: str, is_admin: bool = False):
-        order = self.order_crud.get_order_by_id(user_id, order_id) if not is_admin else self.db.get(Order, order_id)
+    def refund_payment(self, order_id: int, admin_id: int, amount: float, reason: str):
+        """Admin-only: refund all or part of an order's payment via Stripe.
+
+        Customers cannot call this directly — they file a return via
+        POST /order/{order_id}/return, which an admin approves and then
+        refunds through POST /admin/orders/{order_id}/refund.
+        """
+        order = self.db.get(Order, order_id)
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
 
@@ -174,6 +180,17 @@ class PaymentService:
         if not payment or not payment.transaction_id:
             raise HTTPException(status_code=400, detail="No completed payment transaction found")
 
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Refund amount must be positive")
+
+        already_refunded = float(payment.refund_amount or 0)
+        remaining = float(order.total_amount) - already_refunded
+        if amount > remaining:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Refund amount exceeds remaining refundable balance of {remaining:.2f}",
+            )
+
         try:
             refund = stripe.Refund.create(
                 payment_intent=payment.transaction_id,
@@ -183,11 +200,11 @@ class PaymentService:
         except stripe.error.StripeError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        payment.refund_amount = amount
+        payment.refund_amount = already_refunded + amount
         payment.refunded_at = func.current_timestamp()
 
         # update order status
-        self.order_crud.update_order_status(order.id, "refunded", admin_id=user_id if is_admin else None)
+        self.order_crud.update_order_status(order.id, "refunded", admin_id=admin_id)
         self.db.commit()
         return refund
 

@@ -407,17 +407,17 @@ class OrderCrud:
 
         valid_transitions = {
             "pending": ["paid", "payment_failed", "cancelled"],
-            "paid": ["processing", "refund_pending", "cancelled"],
-            "processing": ["packed", "shipped", "refund_pending"],
+            "paid": ["processing", "refund_pending", "refunded", "cancelled"],
+            "processing": ["packed", "shipped", "refund_pending", "refunded"],
             "packed": ["shipped", "refund_pending"],
-            "shipped": ["delivered", "return_requested"],
-            "delivered": ["return_requested"],
+            "shipped": ["delivered", "return_requested", "refunded"],
+            "delivered": ["return_requested", "refunded"],
             "return_requested": ["return_approved", "cancelled"],
             "refund_pending": ["refunded"],
             "payment_failed": ["cancelled"],
             "cancelled": [],
             "refunded": [],
-            "return_approved": []
+            "return_approved": ["refunded"]
         }
 
         allowed_next = valid_transitions.get(order.status, [])
