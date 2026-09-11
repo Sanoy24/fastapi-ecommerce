@@ -116,6 +116,7 @@ jobs:
       - name: Run alembic upgrade head against a brand-new empty database
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fresh_migration_check
+          JWT_SECRET_KEY: test_secret_key_at_least_32_characters_long
         run: |
           sed -i "s#sqlalchemy.url = .*#sqlalchemy.url = ${DATABASE_URL}#" alembic.ini
           alembic upgrade head
