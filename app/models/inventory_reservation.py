@@ -20,7 +20,19 @@ class InventoryReservation(Base):
     variant_id: Mapped["int | None"] = mapped_column(
         ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Nullable: a guest checkout (see app/crud/order.py create_guest_order)
+    # has no user_id at all. Reservation release (on payment success/failure/
+    # order cancellation) must never filter on this column — two of a single
+    # user's simultaneous orders would incorrectly clear each other's
+    # reservations, and for guests, every in-flight guest reservation shares
+    # user_id IS NULL, so clearing "by user" would clear all of them at
+    # once. order_id below is what release logic must filter on instead.
+    user_id: Mapped["int | None"] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    order_id: Mapped["int | None"] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.current_timestamp())
@@ -28,7 +40,8 @@ class InventoryReservation(Base):
     # Relationships
     product: Mapped["Product"] = relationship("Product", back_populates="reservations")
     variant: Mapped["ProductVariant | None"] = relationship("ProductVariant", back_populates="reservations")
-    user: Mapped["User"] = relationship("User")
+    user: Mapped["User | None"] = relationship("User")
+    order: Mapped["Order | None"] = relationship("Order")
 
     @property
     def is_expired(self) -> bool:

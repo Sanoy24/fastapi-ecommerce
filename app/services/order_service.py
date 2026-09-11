@@ -1,9 +1,19 @@
+import secrets
+
 from fastapi import HTTPException, status
 from sqlalchemy import func
 
 from app.core.exceptions import OrderException
 from app.crud.order import OrderCrud
 from app.core.redis import redis_client
+from app.schema.order_schema import GuestAddressInput
+
+# Mirrors UserService's password-reset token pattern exactly (same TTL
+# style, same Redis prefix style): a random urlsafe token maps to the
+# resource it authorizes, expires on its own, and is deleted the moment
+# it's used.
+_GUEST_CLAIM_TOKEN_PREFIX = "guest_order_claim:"
+_GUEST_CLAIM_TOKEN_TTL = 30 * 24 * 3600  # 30 days
 
 
 class OrderService:
@@ -30,6 +40,106 @@ class OrderService:
             )
         finally:
             await redis_client.client.delete(lock_key)
+
+    async def place_guest_order(
+        self,
+        session_id: str,
+        guest_email: str,
+        shipping_address: GuestAddressInput,
+        billing_address: GuestAddressInput,
+        shipping_method_id: int | None = None,
+    ):
+        lock_key = f"checkout_lock:guest:{session_id}"
+
+        acquired = await redis_client.client.set(lock_key, "1", nx=True, ex=10)
+        if not acquired:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Checkout already in progress. Please wait."
+            )
+
+        try:
+            return self.crud.create_guest_order(
+                session_id, guest_email, shipping_address, billing_address, shipping_method_id
+            )
+        except OrderException as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            )
+        finally:
+            await redis_client.client.delete(lock_key)
+
+    def lookup_guest_order(self, order_number: str, email: str):
+        """Used for both the guest order-status lookup endpoint and, after
+        checkout, letting a guest check their own order without an account.
+        """
+        order = self.crud.get_guest_order_by_number_and_email(order_number, email)
+        if not order:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        return order
+
+    async def request_guest_order_claim_link(
+        self, order_number: str, email: str, arq_pool=None
+    ) -> None:
+        """
+        Email a one-time link that attaches a guest order to an account.
+
+        Always returns success regardless of whether anything matched — the
+        same anti-enumeration shape as UserService.forgot_password. The
+        token is the entire authorization for claim_guest_order below, by
+        design: it proves whoever clicks it received the email at
+        guest_email, which is a deliberately lower bar than requiring the
+        claiming account's own email to match (someone may reasonably want
+        to save an order placed with a work email into a personal account).
+        """
+        order = self.crud.get_guest_order_by_number_and_email(order_number, email)
+        if not order:
+            return
+
+        token = secrets.token_urlsafe(32)
+        await redis_client.client.setex(
+            f"{_GUEST_CLAIM_TOKEN_PREFIX}{token}", _GUEST_CLAIM_TOKEN_TTL, str(order.id)
+        )
+
+        if arq_pool:
+            await arq_pool.enqueue_job(
+                "send_guest_order_claim_email_task", email, order.order_number, token
+            )
+        else:
+            from app.services.email_service import send_guest_order_claim_email
+            await send_guest_order_claim_email(
+                to_address=email, order_number=order.order_number, claim_token=token
+            )
+
+    async def claim_guest_order(self, claim_token: str, user_id: int):
+        """Attach a guest order to the calling (authenticated) account.
+
+        One-time use: the token is deleted whether the claim succeeds or
+        the order turns out to already be claimed, so a token can't be
+        replayed after either outcome.
+        """
+        redis_key = f"{_GUEST_CLAIM_TOKEN_PREFIX}{claim_token}"
+        order_id_str = await redis_client.client.get(redis_key)
+        if not order_id_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired claim link.",
+            )
+
+        from app.models.order import Order
+        order = self.db.get(Order, int(order_id_str))
+        await redis_client.client.delete(redis_key)
+
+        if not order or order.user_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This order has already been claimed or no longer exists.",
+            )
+
+        order.user_id = user_id
+        self.db.commit()
+        self.db.refresh(order)
+        return order
 
     def list_orders(self, user_id: int):
         return self.crud.get_orders(user_id)
@@ -65,10 +175,16 @@ class OrderService:
                 detail=f"Only pending orders can be cancelled. Current status: '{order.status}'.",
             )
 
-        # Clear reservations for this user
+        # Clear this order's reservations. Filtering by order_id, not
+        # user_id: user_id == order.user_id would also match this user's
+        # OTHER simultaneous pending orders' reservations (or, for a guest
+        # order where user_id is None, every other guest order's
+        # reservations, since they'd all share user_id IS NULL) — deleting
+        # those early would let their stock be resold before they've
+        # actually been paid for or cancelled.
         from app.models.inventory_reservation import InventoryReservation
         reservations = self.db.query(InventoryReservation).filter(
-            InventoryReservation.user_id == order.user_id
+            InventoryReservation.order_id == order.id
         ).all()
         for res in reservations:
             self.db.delete(res)

@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, Numeric, String, DateTime, func
+from sqlalchemy import CheckConstraint, ForeignKey, Numeric, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Enum as SQLEnum
 from typing import List, Optional
@@ -13,17 +13,35 @@ class Order(Base):
     __tablename__ = "orders"
     __table_args__ = (
         Index("ix_orders_user_id_status", "user_id", "status"),
+        Index("ix_orders_guest_email", "guest_email"),
+        CheckConstraint(
+            "user_id IS NOT NULL OR guest_email IS NOT NULL",
+            name="ck_orders_user_or_guest_email",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    # Nullable: a guest checkout order has no user_id at all — see
+    # guest_email below and app/crud/order.py create_guest_order. The check
+    # constraint guarantees every order is attributable to someone one way
+    # or the other.
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
-    shipping_address_id: Mapped[int] = mapped_column(
-        ForeignKey("addresses.id", ondelete="RESTRICT"), nullable=False
+    # Set only for guest orders. Kept permanently even after the order is
+    # later claimed into an account (see OrderService.claim_guest_order) —
+    # it's a historical record of who originally placed the order, not a
+    # live ownership pointer.
+    guest_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Nullable: a guest has no Address row to point at — the snapshot
+    # columns below are the source of truth for a guest order's address,
+    # built directly from the inline address the guest submitted at
+    # checkout rather than from a loaded Address.
+    shipping_address_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("addresses.id", ondelete="RESTRICT"), nullable=True
     )
-    billing_address_id: Mapped[int] = mapped_column(
-        ForeignKey("addresses.id", ondelete="RESTRICT"), nullable=False
+    billing_address_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("addresses.id", ondelete="RESTRICT"), nullable=True
     )
     coupon_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True
@@ -62,12 +80,12 @@ class Order(Base):
     delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="orders")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="orders")
     coupon: Mapped[Optional["Coupon"]] = relationship("Coupon", back_populates="orders")
-    shipping_address: Mapped["Address"] = relationship(
+    shipping_address: Mapped[Optional["Address"]] = relationship(
         "Address", foreign_keys=[shipping_address_id]
     )
-    billing_address: Mapped["Address"] = relationship(
+    billing_address: Mapped[Optional["Address"]] = relationship(
         "Address", foreign_keys=[billing_address_id]
     )
     order_items: Mapped[List["OrderItem"]] = relationship(

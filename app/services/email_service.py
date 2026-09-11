@@ -167,3 +167,37 @@ async def send_verification_email(to_address: str, verification_token: str) -> N
         html_body=html_body,
         text_body=text_body,
     )
+
+
+async def send_guest_order_claim_email(to_address: str, order_number: str, claim_token: str) -> None:
+    """Send a guest a link that attaches their order to an account.
+
+    Sent on request (POST /order/guest/request-claim-link), not
+    automatically at checkout — mirrors the password-reset request/consume
+    shape rather than baking a sensitive token into every order
+    confirmation email regardless of whether the guest ever wants an account.
+    """
+    claim_url = f"{settings.FRONTEND_URL}/claim-order?token={claim_token}"
+
+    html_body = f"""
+    <html><body>
+    <h2>Save order #{order_number} to an account</h2>
+    <p>Create or sign in to an account to track this order and any future ones in one place:</p>
+    <p><a href="{claim_url}" style="background:#4F46E5;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">
+        Save This Order
+    </a></p>
+    <p>This link expires in 30 days. If you didn't request this, you can safely ignore this email.</p>
+    </body></html>
+    """
+    text_body = (
+        f"Save order #{order_number} to an account\n\n"
+        f"Save this order to an account here: {claim_url}\n"
+        f"This link expires in 30 days.\n"
+        f"If you didn't request this, ignore this email."
+    )
+    await send_email(
+        to_address=to_address,
+        subject=f"Save your order #{order_number} to an account",
+        html_body=html_body,
+        text_body=text_body,
+    )

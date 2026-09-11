@@ -166,6 +166,14 @@ async def send_verification_email_task(ctx, to_address: str, verification_token:
     return True
 
 
+async def send_guest_order_claim_email_task(ctx, to_address: str, order_number: str, claim_token: str):
+    from app.services.email_service import send_guest_order_claim_email
+
+    logger.info(f"ARQ: Sending guest order claim link for order {order_number} to {to_address}")
+    await send_guest_order_claim_email(to_address, order_number, claim_token)
+    return True
+
+
 async def detect_abandoned_carts_task(ctx):
     """
     Find carts with items where last_activity_at < NOW() - 24h and user has email, enqueue recovery emails.
@@ -239,6 +247,7 @@ class WorkerSettings:
         send_order_confirmation_email_task,
         send_password_reset_email_task,
         send_verification_email_task,
+        send_guest_order_claim_email_task,
         detect_abandoned_carts_task,
         process_outbox_events_task,
         cleanup_completed_outbox_events_task,

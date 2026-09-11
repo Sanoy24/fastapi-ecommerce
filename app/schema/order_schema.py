@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from datetime import datetime
 
@@ -50,3 +50,39 @@ class OrderCreateRequest(BaseModel):
     shipping_address_id: int
     billing_address_id: int
     shipping_method_id: Optional[int] = None
+
+
+# ---- Guest checkout ----
+# A guest has no saved Address row, so checkout takes the address content
+# directly instead of an address_id. Field names deliberately match
+# app.models.address.Address / OrderCrud._address_snapshot so the same
+# snapshot logic works unchanged for both a real Address row and this.
+class GuestAddressInput(BaseModel):
+    street: Optional[str] = None
+    city: Optional[str] = Field(default=None, max_length=100)
+    state: Optional[str] = Field(default=None, max_length=100)
+    postal_code: Optional[str] = Field(default=None, max_length=20)
+    country: Optional[str] = Field(default=None, max_length=100)
+
+
+class GuestOrderCreateRequest(BaseModel):
+    email: EmailStr
+    shipping_address: GuestAddressInput
+    billing_address: GuestAddressInput
+    shipping_method_id: Optional[int] = None
+
+
+class GuestOrderLookupRequest(BaseModel):
+    """Order number + email is the guest's proof of ownership — both are
+    only known to whoever placed or received the order confirmation."""
+    order_number: str
+    email: EmailStr
+
+
+class GuestOrderClaimLinkRequest(BaseModel):
+    order_number: str
+    email: EmailStr
+
+
+class GuestOrderClaimRequest(BaseModel):
+    claim_token: str
