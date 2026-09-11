@@ -4,7 +4,14 @@ from typing import List
 from app.schema.user_schema import UserPublic
 from app.services.order_service import OrderService
 from app.dependencies import get_current_user, get_order_service_dep, get_db, get_arq_pool
-from app.schema.order_schema import OrderCreateRequest, OrderResponse
+from app.schema.order_schema import (
+    GuestOrderClaimLinkRequest,
+    GuestOrderClaimRequest,
+    GuestOrderCreateRequest,
+    GuestOrderLookupRequest,
+    OrderCreateRequest,
+    OrderResponse,
+)
 from app.utils.idempotency import check_idempotency, cache_idempotent_response
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from arq.connections import ArqRedis
@@ -58,6 +65,111 @@ async def create_order(
         await cache_idempotent_response(idempotency_key, order_response.model_dump(mode="json"))
 
     return order
+
+
+# --- Guest checkout ---
+# Registered before GET/POST /{order_id}... below: Starlette matches routes
+# in registration order, and /{order_id} would otherwise capture "guest" as
+# its path parameter and 422 on the int conversion before this ever runs.
+
+@router.post(
+    "/guest",
+    response_model=OrderResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Guest checkout",
+    response_model_exclude_none=True,
+)
+@limiter.limit("5/minute")
+async def create_guest_order(
+    request: Request,
+    guest_order_request: GuestOrderCreateRequest,
+    order_service: order_dependency,
+    arq_pool: Annotated[ArqRedis | None, Depends(get_arq_pool)],
+    idempotency_key: str | None = Depends(check_idempotency),
+):
+    """
+    Place an order from the current anonymous cart — no account required.
+    Requires a session_id cookie, which the cart endpoints already set the
+    moment a guest adds their first item.
+    """
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No cart found for this session. Add an item to your cart first.",
+        )
+
+    order = await order_service.place_guest_order(
+        session_id=session_id,
+        guest_email=guest_order_request.email,
+        shipping_address=guest_order_request.shipping_address,
+        billing_address=guest_order_request.billing_address,
+        shipping_method_id=guest_order_request.shipping_method_id,
+    )
+
+    if arq_pool:
+        await arq_pool.enqueue_job(
+            "send_order_confirmation_email_task",
+            guest_order_request.email,
+            order.order_number,
+            order.total_amount,
+        )
+
+    if idempotency_key:
+        order_response = OrderResponse.model_validate(order)
+        await cache_idempotent_response(idempotency_key, order_response.model_dump(mode="json"))
+
+    return order
+
+
+@router.post("/guest/lookup", response_model=OrderResponse, summary="Look up a guest order")
+@limiter.limit("10/minute")
+def lookup_guest_order(
+    request: Request,
+    lookup: GuestOrderLookupRequest,
+    order_service: order_dependency,
+):
+    """Track a guest order by order number + the email it was placed with.
+    Rate limited — this pair is the entire authorization, so it's the one
+    thing worth slowing down guessing at."""
+    return order_service.lookup_guest_order(lookup.order_number, lookup.email)
+
+
+@router.post(
+    "/guest/request-claim-link",
+    summary="Email a link to save a guest order to an account",
+)
+@limiter.limit("5/minute")
+async def request_guest_order_claim_link(
+    request: Request,
+    body: GuestOrderClaimLinkRequest,
+    order_service: order_dependency,
+    arq_pool: Annotated[ArqRedis | None, Depends(get_arq_pool)],
+):
+    """
+    Always responds the same way regardless of whether order_number/email
+    matched anything — same anti-enumeration shape as /users/forgot-password.
+    """
+    await order_service.request_guest_order_claim_link(body.order_number, body.email, arq_pool)
+    return {
+        "message": "If that order exists and hasn't already been claimed, "
+        "we've emailed a link to save it to an account."
+    }
+
+
+@router.post(
+    "/guest/claim",
+    response_model=OrderResponse,
+    summary="Attach a guest order to your account",
+)
+async def claim_guest_order(
+    body: GuestOrderClaimRequest,
+    current_user: user_dependency,
+    order_service: order_dependency,
+):
+    """Consume a claim link's token (see /guest/request-claim-link) and
+    attach that guest order to the signed-in account."""
+    return await order_service.claim_guest_order(body.claim_token, current_user.id)
 
 
 @router.get("", response_model=list[OrderResponse])

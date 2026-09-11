@@ -106,8 +106,9 @@ class OrderListItem(BaseModel):
     """Order item for admin order list"""
     id: int
     order_number: str
-    user_id: int
-    user_email: str = Field(..., description="Email of the user who placed the order")
+    user_id: Optional[int] = None
+    user_email: str = Field(..., description="Email of the account, or the guest's email for a guest order")
+    is_guest_order: bool = False
     total_amount: float
     status: str
     payment_status: str

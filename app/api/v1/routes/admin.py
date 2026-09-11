@@ -270,6 +270,36 @@ async def list_all_orders(
     )
 
 
+def _order_contact_email(order) -> str:
+    """The account email, or the guest email for a guest order.
+
+    ck_orders_user_or_guest_email guarantees one of these is always set —
+    the assert documents that invariant for mypy rather than leaving the
+    fallback typed as str | None.
+    """
+    email = order.user.email if order.user else order.guest_email
+    assert email, f"order {order.id} has neither a user nor a guest_email"
+    return email
+
+
+def _order_list_item(order) -> "OrderListItem":
+    """Build the admin OrderListItem response, correctly for a guest order
+    too — order.user is None for one, so order.user.email would raise.
+    """
+    return OrderListItem(
+        id=order.id,
+        order_number=order.order_number,
+        user_id=order.user_id,
+        user_email=_order_contact_email(order),
+        is_guest_order=order.user_id is None,
+        total_amount=order.total_amount,
+        status=order.status,
+        payment_status=order.payment_status,
+        order_date=order.order_date,
+        shipped_at=order.shipped_at,
+    )
+
+
 @router.put("/orders/{order_id}/status", response_model=OrderListItem)
 def update_order_status(
     order_id: int,
@@ -279,19 +309,7 @@ def update_order_status(
 ):
     """Update order status (Admin)"""
     order = admin_service.update_order_status(order_id, payload.status, admin_user.id)
-
-
-    return OrderListItem(
-        id=order.id,
-        order_number=order.order_number,
-        user_id=order.user_id,
-        user_email=order.user.email,
-        total_amount=order.total_amount,
-        status=order.status,
-        payment_status=order.payment_status,
-        order_date=order.order_date,
-        shipped_at=order.shipped_at,
-    )
+    return _order_list_item(order)
 
 
 @router.put("/orders/{order_id}/shipping", response_model=OrderListItem)
@@ -311,26 +329,17 @@ def update_order_shipping(
         carrier=payload.shipping_carrier
     )
 
-    # Dispatch shipped email asynchronously
+    # Dispatch shipped email asynchronously — to the account email, or the
+    # guest's email for a guest order.
     background_tasks.add_task(
         send_order_shipped_email,
-        to_address=order.user.email,
+        to_address=_order_contact_email(order),
         order_number=order.order_number,
         tracking_number=payload.tracking_number,
         carrier=payload.shipping_carrier,
     )
 
-    return OrderListItem(
-        id=order.id,
-        order_number=order.order_number,
-        user_id=order.user_id,
-        user_email=order.user.email,
-        total_amount=order.total_amount,
-        status=order.status,
-        payment_status=order.payment_status,
-        order_date=order.order_date,
-        shipped_at=order.shipped_at,
-    )
+    return _order_list_item(order)
 
 
 # --- REVIEWS ---

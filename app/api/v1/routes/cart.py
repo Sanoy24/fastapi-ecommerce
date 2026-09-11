@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Request
 
 from fastapi.responses import JSONResponse
@@ -13,6 +13,24 @@ router = APIRouter(tags=["Cart"])
 
 cart_dependency = Annotated[CartService, Depends(get_cart_service_dep)]
 user_dep = Annotated[UserPublic | None, Depends(get_optional_user)]
+
+_SESSION_COOKIE_MAX_AGE = 1296000  # 15 days, matching GET /cart
+
+
+def _with_session_cookie(payload: Any, session_id: str) -> JSONResponse:
+    """Guarantee the guest gets the session_id their cart now lives under.
+
+    Every anonymous write route that can *originate* a session_id (i.e.
+    generates one because the request arrived with none) must send it back
+    this way — GET /cart already did; POST /items and POST /coupon
+    previously didn't, silently generating a session, creating a Cart row
+    under it, and never telling the client, orphaning that cart on the
+    very first write for anyone who adds to their cart before ever
+    fetching it (the normal "Add to cart" button flow).
+    """
+    response = JSONResponse(payload)
+    response.set_cookie("session_id", session_id, httponly=True, max_age=_SESSION_COOKIE_MAX_AGE)
+    return response
 
 
 @router.get("")
@@ -48,12 +66,13 @@ async def add_item(
 ):
     if current_user:
         cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
-    else:
-        session_id = request.cookies.get("session_id") or generate_session_id()
-        cart = cart_service.get_or_create_cart(user_id=None, session_id=session_id)
+        item = cart_service.add_item(cart=cart, data=data)
+        return {"message": "Item added", "item_id": item.id}
 
+    session_id = request.cookies.get("session_id") or generate_session_id()
+    cart = cart_service.get_or_create_cart(user_id=None, session_id=session_id)
     item = cart_service.add_item(cart=cart, data=data)
-    return {"message": "Item added", "item_id": item.id}
+    return _with_session_cookie({"message": "Item added", "item_id": item.id}, session_id)
 
 
 @router.put("/items/{item_id}")
@@ -102,12 +121,13 @@ async def apply_coupon(
 ):
     if current_user:
         cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
-    else:
-        session_id = request.cookies.get("session_id") or generate_session_id()
-        cart = cart_service.get_or_create_cart(user_id=None, session_id=session_id)
+        cart_service.apply_coupon(cart, code)
+        return {"message": f"Coupon {code} applied successfully"}
 
+    session_id = request.cookies.get("session_id") or generate_session_id()
+    cart = cart_service.get_or_create_cart(user_id=None, session_id=session_id)
     cart_service.apply_coupon(cart, code)
-    return {"message": f"Coupon {code} applied successfully"}
+    return _with_session_cookie({"message": f"Coupon {code} applied successfully"}, session_id)
 
 
 @router.delete("/coupon")

@@ -27,6 +27,22 @@ class PaymentService:
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
 
+        return self._create_payment_intent_for_order(order)
+
+    def create_guest_payment_intent(self, order_number: str, email: str):
+        """The guest-checkout equivalent of create_payment_intent.
+
+        A guest has no account to authenticate with, so order_number + email
+        stands in for it — the same proof-of-ownership pair used by the
+        order lookup and claim-link endpoints.
+        """
+        order = self.order_crud.get_guest_order_by_number_and_email(order_number, email)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        return self._create_payment_intent_for_order(order)
+
+    def _create_payment_intent_for_order(self, order: Order):
         if order.payment_status == "success":
             raise HTTPException(status_code=400, detail="Order already paid")
 
@@ -35,7 +51,10 @@ class PaymentService:
             intent = stripe.PaymentIntent.create(
                 amount=int(order.total_amount * 100),  # Amount in cents
                 currency="usd",
-                metadata={"order_id": str(order.id), "user_id": str(user_id)},
+                metadata={
+                    "order_id": str(order.id),
+                    "user_id": str(order.user_id) if order.user_id is not None else "guest",
+                },
                 automatic_payment_methods={"enabled": True},
             )
         except stripe.error.StripeError as e:
@@ -150,8 +169,12 @@ class PaymentService:
                         )
                         self.db.add(inv_tx)
 
+                # order_id, not user_id: see the comment in
+                # OrderService.cancel_order for why filtering by user_id
+                # here would clear reservations belonging to a different
+                # order (or, for a guest, every other guest order in flight).
                 reservations = self.db.query(InventoryReservation).filter(
-                    InventoryReservation.user_id == order.user_id
+                    InventoryReservation.order_id == order.id
                 ).all()
                 for res in reservations:
                     self.db.delete(res)
@@ -169,9 +192,10 @@ class PaymentService:
             if order:
                 order.payment_status = "failed"
 
-                # Clear reservations
+                # Clear this order's reservations — order_id, not user_id
+                # (see OrderService.cancel_order for why).
                 reservations = self.db.query(InventoryReservation).filter(
-                    InventoryReservation.user_id == order.user_id
+                    InventoryReservation.order_id == order.id
                 ).all()
                 for res in reservations:
                     self.db.delete(res)

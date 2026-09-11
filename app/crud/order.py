@@ -9,6 +9,7 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.order_event import OrderEvent
 from app.models.product import Product
+from app.models.cart import Cart
 from app.models.cart_item import CartItem
 from app.models.coupon_usage import CouponUsage
 from app.models.inventory_reservation import InventoryReservation
@@ -18,6 +19,7 @@ from app.core.exceptions import OrderException
 from app.models.user import User
 from app.utils.order_utils import generate_order_number, generate_trx_ref
 from app.crud.address import AddressCrud
+from app.schema.order_schema import GuestAddressInput
 from app.services.pricing import calculate_coupon_discount, calculate_promotion_discount, get_unit_price
 
 
@@ -37,6 +39,19 @@ class OrderCrud:
             select(CartItem)
             .join(CartItem.cart)
             .where(CartItem.cart.has(user_id=user_id))
+        )
+        items = self.db.scalars(stmt).all()
+        if not items:
+            raise OrderException("Your cart is empty.")
+        return items
+
+    def get_guest_cart_items(self, session_id: str):
+        """The anonymous-cart equivalent of get_cart_items — same cart the
+        guest has been adding to via POST /cart/items with no account."""
+        stmt = (
+            select(CartItem)
+            .join(CartItem.cart)
+            .where(Cart.session_id == session_id, Cart.user_id.is_(None))
         )
         items = self.db.scalars(stmt).all()
         if not items:
@@ -78,8 +93,76 @@ class OrderCrud:
 
         items = self.get_cart_items(user_id)
         self.validate_stock(items)
-
         cart = items[0].cart
+
+        return self._build_and_persist_order(
+            user_id=user_id,
+            guest_email=None,
+            shipping_address=shipping_address,
+            billing_address=billing_address,
+            shipping_address_id=shipping_id,
+            billing_address_id=billing_id,
+            items=items,
+            cart=cart,
+            shipping_method_id=shipping_method_id,
+        )
+
+    def create_guest_order(
+        self,
+        session_id: str,
+        guest_email: str,
+        shipping_address: GuestAddressInput,
+        billing_address: GuestAddressInput,
+        shipping_method_id: int | None = None,
+    ):
+        """Checkout for an anonymous cart — no account, no saved Address rows.
+
+        Coupons are not supported here: CouponUsage.user_id is NOT NULL, so
+        there is no row to record a guest's usage against, and silently
+        dropping the discount instead would just overcharge a guest who
+        thinks it's applied. Promotions (which aren't user-scoped) still
+        apply normally.
+        """
+        items = self.get_guest_cart_items(session_id)
+        self.validate_stock(items)
+        cart = items[0].cart
+
+        if cart.coupon_id:
+            raise OrderException("Please sign in to check out with a coupon code.")
+
+        return self._build_and_persist_order(
+            user_id=None,
+            guest_email=guest_email,
+            shipping_address=shipping_address,
+            billing_address=billing_address,
+            shipping_address_id=None,
+            billing_address_id=None,
+            items=items,
+            cart=cart,
+            shipping_method_id=shipping_method_id,
+        )
+
+    def _build_and_persist_order(
+        self,
+        *,
+        user_id: int | None,
+        guest_email: str | None,
+        shipping_address,
+        billing_address,
+        shipping_address_id: int | None,
+        billing_address_id: int | None,
+        items: list[CartItem],
+        cart: Cart,
+        shipping_method_id: int | None,
+    ) -> Order:
+        """Shared body of create_order / create_guest_order.
+
+        shipping_address/billing_address are duck-typed: either a real
+        Address row or a GuestAddressInput — both expose the same
+        street/city/state/postal_code/country attributes that
+        _address_snapshot, _calculate_tax_amount and
+        _calculate_shipping_amount actually read.
+        """
         raw_subtotal = float(sum(get_unit_price(i) * i.quantity for i in items))
         discount = self._calculate_discount(items, raw_subtotal, cart, user_id)
 
@@ -91,8 +174,9 @@ class OrderCrud:
 
         order = Order(
             user_id=user_id,
-            shipping_address_id=shipping_id,
-            billing_address_id=billing_id,
+            guest_email=guest_email,
+            shipping_address_id=shipping_address_id,
+            billing_address_id=billing_address_id,
             shipping_address_snapshot=self._address_snapshot(shipping_address),
             billing_address_snapshot=self._address_snapshot(billing_address),
             coupon_id=cart.coupon_id,
@@ -123,7 +207,8 @@ class OrderCrud:
         for item in items:
             self.db.delete(item)
 
-        # Record coupon usage if applicable
+        # Record coupon usage if applicable (never true for a guest order —
+        # create_guest_order rejects a coupon-bearing cart before this point)
         if cart.coupon_id and discount > 0:
             usage = CouponUsage(
                 coupon_id=cart.coupon_id,
@@ -140,6 +225,7 @@ class OrderCrud:
                 "order_id": order.id,
                 "order_number": order.order_number,
                 "user_id": order.user_id,
+                "guest_email": order.guest_email,
                 "total_amount": float(order.total_amount),
             }
         )
@@ -159,7 +245,7 @@ class OrderCrud:
             "state": addr.state,
         }
 
-    def _calculate_discount(self, items: list[CartItem], raw_subtotal: float, cart, user_id: int) -> float:
+    def _calculate_discount(self, items: list[CartItem], raw_subtotal: float, cart, user_id: int | None) -> float:
         """Coupon + promotion discount for a checkout, mirroring what the cart displayed."""
         discount = 0.0
 
@@ -243,7 +329,7 @@ class OrderCrud:
 
         return shipping_amount
 
-    def _create_order_items_and_reserve_stock(self, order: Order, items: list[CartItem], user_id: int) -> None:
+    def _create_order_items_and_reserve_stock(self, order: Order, items: list[CartItem], user_id: int | None) -> None:
         """Create OrderItem rows and reserve stock instead of deducting it directly.
         Actual deduction happens on successful payment — see
         PaymentService._handle_successful_payment.
@@ -262,10 +348,15 @@ class OrderCrud:
             # variant_id is set for variant items so the reservation is
             # scoped to the variant's own stock pool, not the parent product's
             # — see ProductVariant.available_stock / Product.available_stock.
+            # order_id is what release logic (PaymentService,
+            # OrderService.cancel_order) must filter on — never user_id,
+            # which is None for every guest order and would match every
+            # other in-flight guest reservation, not just this order's.
             reservation = InventoryReservation(
                 product_id=item.product_id,
                 variant_id=item.variant_id,
                 user_id=user_id,
+                order_id=order.id,
                 quantity=item.quantity,
                 expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15)
             )
@@ -294,6 +385,23 @@ class OrderCrud:
         if not order or order.user_id != user_id:
             raise OrderException("Order not found")
         return order
+
+    def get_guest_order_by_number_and_email(self, order_number: str, email: str) -> Order | None:
+        """Look up a still-unclaimed guest order.
+
+        Only matches orders with user_id IS NULL — once claimed (see
+        OrderService.claim_guest_order), the order is no longer reachable
+        this way; logging into the account it was claimed into is the only
+        path in. Email is compared case-insensitively since a guest may not
+        type it identically to how it was originally entered.
+        """
+        stmt = select(Order).where(
+            Order.order_number == order_number,
+            Order.user_id.is_(None),
+            Order.guest_email.isnot(None),
+            func.lower(Order.guest_email) == email.lower(),
+        )
+        return self.db.scalars(stmt).first()
 
     def get_total_orders(self):
         total_orders = self.db.query(func.count()).scalar() or 0
@@ -382,7 +490,10 @@ class OrderCrud:
         user_id: Optional[int] = None,
     ):
         """Get paginated list of all orders with optional filters"""
-        query = self.db.query(Order).join(User, Order.user_id == User.id)
+        # outerjoin, not join: an inner join here would silently exclude
+        # every guest order (user_id IS NULL) from the admin order list —
+        # they'd never appear for fulfillment, shipping, or refunds.
+        query = self.db.query(Order).outerjoin(User, Order.user_id == User.id)
 
         # Apply filters
         if status:
