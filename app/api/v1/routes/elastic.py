@@ -1,8 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Depends
 
 from app.dependencies import get_elastic_service_dep
+from app.schema.search_schema import ProductElasticSearchRequest
 from app.services.elasticsearch_service import ElasticService
 
 router = APIRouter(tags=["ELastic"])
@@ -15,8 +16,8 @@ async def elastic_health_check(elastic_service: elastic_dependency):
 
 
 @router.post("/search")
-async def search(elastic_service: elastic_dependency, query: dict = Body(...)):
-    return await elastic_service.search(query)
+async def search(elastic_service: elastic_dependency, params: ProductElasticSearchRequest):
+    return await elastic_service.search_products(params)
 
 
 @router.get("/suggest")
