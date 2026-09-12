@@ -52,6 +52,10 @@ async def process_outbox_events_task(ctx):
     marked terminally "failed" after MAX_OUTBOX_ATTEMPTS. Without this, a
     single transient failure (a broker hiccup, a network blip) would strand
     an event with no automatic path back to being processed.
+
+    "product.back_in_stock" events actually send an email once
+    successfully "published" (see below) — every other topic just logs,
+    same as before, since there's still no real broker to hand off to.
     """
     logger.info("Starting outbox event processing")
 
@@ -61,6 +65,7 @@ async def process_outbox_events_task(ctx):
     # For now, we'll run it directly as this worker will block for DB operations.
     def _process():
         now = utcnow()
+        back_in_stock_payloads = []
         with SessionLocal() as db:
             events = (
                 db.execute(
@@ -90,6 +95,8 @@ async def process_outbox_events_task(ctx):
                     _publish_event(event)
                     event.status = "completed"
                     event.processed_at = func.now()
+                    if event.topic == "product.back_in_stock":
+                        back_in_stock_payloads.append(dict(event.payload))
                 except Exception as e:
                     event.retry_count += 1
                     if event.retry_count >= MAX_OUTBOX_ATTEMPTS:
@@ -109,10 +116,22 @@ async def process_outbox_events_task(ctx):
                         event.next_attempt_at = now + delay
                     event.error_message = str(e)
             db.commit()
+        return back_in_stock_payloads
 
     # Run the sync DB code in an executor
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _process)
+    back_in_stock_payloads = await loop.run_in_executor(None, _process)
+
+    if back_in_stock_payloads:
+        from app.services.email_service import send_back_in_stock_email
+
+        for payload in back_in_stock_payloads:
+            await send_back_in_stock_email(
+                to_address=payload["email"],
+                product_name=payload["product_name"],
+                product_slug=payload["product_slug"],
+            )
+
     logger.info("Finished outbox event processing")
 
 

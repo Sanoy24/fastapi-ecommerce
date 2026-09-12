@@ -236,3 +236,35 @@ async def send_abandoned_cart_email(to_address: str, item_count: int) -> None:
         html_body=html_body,
         text_body=text_body,
     )
+
+
+async def send_back_in_stock_email(to_address: str, product_name: str, product_slug: str) -> None:
+    """Notify a customer that an item they subscribed to is available
+    again. Sent by app.workers.arq_worker.process_outbox_events_task for
+    "product.back_in_stock" outbox events — see
+    app.services.back_in_stock_service.notify_back_in_stock_subscribers
+    for where those get written.
+    """
+    product_url = f"{settings.FRONTEND_URL}/products/{product_slug}"
+
+    html_body = f"""
+    <html><body>
+    <h2>{product_name} is back in stock! 🎉</h2>
+    <p>Good news — an item you were waiting on is available again.</p>
+    <p><a href="{product_url}" style="background:#4F46E5;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">
+        View {product_name}
+    </a></p>
+    <p>Stock can run out again, so it's worth grabbing it soon.</p>
+    </body></html>
+    """
+    text_body = (
+        f"{product_name} is back in stock!\n\n"
+        f"An item you were waiting on is available again: {product_url}\n"
+        f"Stock can run out again, so it's worth grabbing it soon."
+    )
+    await send_email(
+        to_address=to_address,
+        subject=f"{product_name} is back in stock!",
+        html_body=html_body,
+        text_body=text_body,
+    )
