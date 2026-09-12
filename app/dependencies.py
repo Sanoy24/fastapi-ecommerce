@@ -19,6 +19,7 @@ from app.services.coupon_service import CouponService
 from app.services.elasticsearch_service import ElasticService
 from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
+from app.services.back_in_stock_service import BackInStockService
 from app.services.product_service import ProductService
 from app.services.promotion_service import PromotionService
 from app.services.review_service import ReviewService
@@ -178,6 +179,9 @@ def get_coupon_service_dep(db: Session = Depends(get_db)):
 
 def get_promotion_service_dep(db: Session = Depends(get_db)):
     return PromotionService(db)
+
+def get_back_in_stock_service_dep(db: Session = Depends(get_db)) -> BackInStockService:
+    return BackInStockService(db)
 
 def get_arq_pool(request: Request) -> ArqRedis | None:
     """Get the ARQ Redis pool attached to the app state."""

@@ -28,6 +28,7 @@ from .shipping import ShippingZone, ShippingMethod, ShippingRate
 from .product_relation import ProductRelation
 from .promotion import Promotion
 from .review_vote import ReviewVote
+from .back_in_stock_subscription import BackInStockSubscription
 
 __all__ = [
     "User",
@@ -62,4 +63,5 @@ __all__ = [
     "PaymentEvent",
     "Promotion",
     "ReviewVote",
+    "BackInStockSubscription",
 ]

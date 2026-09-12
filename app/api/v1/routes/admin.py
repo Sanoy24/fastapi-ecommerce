@@ -28,6 +28,7 @@ from app.services.email_service import send_order_shipped_email
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from fastapi import BackgroundTasks, HTTPException
+from app.services.back_in_stock_service import notify_back_in_stock_subscribers
 
 router = APIRouter(tags=["Admin"])
 
@@ -104,7 +105,8 @@ def build_sales_trends_stmt(cutoff: datetime):
 def get_sales_trends(
     admin_service: Annotated[AdminService, Depends(get_admin_service)],
     current_admin: Annotated[UserPublic, Depends(require_admin)],
-    days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
+    days: int = Query(30, ge=1, le=365,
+                      description="Number of days to analyze"),
 ):
     """Get sales revenue and order counts over time (Admin only)."""
     from datetime import timedelta
@@ -146,7 +148,8 @@ def get_top_products(
             Product.id.label('product_id'),
             Product.name.label('product_name'),
             func.sum(OrderItem.quantity).label('total_quantity_sold'),
-            func.sum(OrderItem.quantity * OrderItem.unit_price).label('total_revenue')
+            func.sum(OrderItem.quantity *
+                     OrderItem.unit_price).label('total_revenue')
         )
         .join(OrderItem, Product.id == OrderItem.product_id)
         .join(Order, Order.id == OrderItem.order_id)
@@ -243,7 +246,8 @@ async def update_user_role(
     current_admin: Annotated[UserPublic, Depends(require_admin)],
 ):
     """Update a user's role"""
-    user = admin_service.update_user_role(user_id=user_id, new_role=role_update.role, admin_id=current_admin.id)
+    user = admin_service.update_user_role(
+        user_id=user_id, new_role=role_update.role, admin_id=current_admin.id)
     return UserPublic.model_validate(user)
 
 
@@ -309,7 +313,8 @@ def update_order_status(
     admin_service: Annotated[AdminService, Depends(get_admin_service)],
 ):
     """Update order status (Admin)"""
-    order = admin_service.update_order_status(order_id, payload.status, admin_user.id)
+    order = admin_service.update_order_status(
+        order_id, payload.status, admin_user.id)
     return _order_list_item(order)
 
 
@@ -381,6 +386,7 @@ def refund_order(
         reason=request.reason,
     )
 
+
 @router.get("/returns", response_model=list[ReturnResponse], summary="List all return requests")
 def list_return_requests(
     db: Session = Depends(get_db),
@@ -397,6 +403,7 @@ def list_return_requests(
 
     returns = db.scalars(stmt).all()
     return returns
+
 
 @router.patch("/returns/{return_id}", response_model=ReturnResponse, summary="Approve or reject a return")
 def resolve_return(
@@ -425,10 +432,12 @@ def resolve_return(
         raise HTTPException(status_code=404, detail="Return request not found")
 
     if return_req.status != "pending":
-        raise HTTPException(status_code=400, detail=f"Return already {return_req.status}")
+        raise HTTPException(
+            status_code=400, detail=f"Return already {return_req.status}")
 
     if request.status not in ["approved", "rejected"]:
-        raise HTTPException(status_code=400, detail="Status must be approved or rejected")
+        raise HTTPException(
+            status_code=400, detail="Status must be approved or rejected")
 
     order_crud = OrderCrud(db)
     refund_amount = 0.0
@@ -448,7 +457,8 @@ def resolve_return(
             ).all()
             for item in other.items
         }
-        overlap = {i["order_item_id"] for i in return_req.items} & other_approved_items
+        overlap = {i["order_item_id"]
+                   for i in return_req.items} & other_approved_items
         if overlap:
             raise HTTPException(
                 status_code=400,
@@ -465,12 +475,14 @@ def resolve_return(
                     detail=f"Cannot return {returned['quantity']} of item {order_item.id} — only {order_item.quantity} were ordered",
                 )
 
-            refund_amount += float(order_item.unit_price) * returned["quantity"]
+            refund_amount += float(order_item.unit_price) * \
+                returned["quantity"]
 
             # A variant item restocks the variant's own pool, not the
             # parent product's — they're separate (see
             # ProductVariant.available_stock).
-            target = order_item.variant if (order_item.variant_id and order_item.variant) else order_item.product
+            target = order_item.variant if (
+                order_item.variant_id and order_item.variant) else order_item.product
             qty_before = target.stock_quantity
             target.stock_quantity += returned["quantity"]
 
@@ -486,13 +498,22 @@ def resolve_return(
                 created_by=admin.id,
             ))
 
+            notify_back_in_stock_subscribers(
+                db,
+                product_id=order_item.product_id,
+                variant_id=order_item.variant_id,
+                old_quantity=qty_before,
+                new_quantity=target.stock_quantity,
+            )
+
     return_req.status = request.status
     return_req.resolution_note = request.resolution_note
     return_req.resolved_at = func.current_timestamp()
 
     new_order_status = "return_approved" if request.status == "approved" else "delivered"
     try:
-        order_crud.update_order_status(return_req.order_id, new_order_status, admin_id=admin.id)
+        order_crud.update_order_status(
+            return_req.order_id, new_order_status, admin_id=admin.id)
     except HTTPException:
         # Ignore transition errors if the order is already in that state
         pass
@@ -522,6 +543,7 @@ def resolve_return(
     response.refund_error = refund_error
     return response
 
+
 @router.get(
     "/reviews",
     response_model=ReviewModerationResponse,
@@ -548,7 +570,8 @@ async def approve_review(
     current_admin: Annotated[UserPublic, Depends(require_admin)],
 ):
     """Approve a review"""
-    review = admin_service.approve_review(review_id=review_id, admin_id=current_admin.id)
+    review = admin_service.approve_review(
+        review_id=review_id, admin_id=current_admin.id)
     return {"message": "Review approved successfully", "review_id": review.id}
 
 

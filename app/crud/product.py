@@ -16,9 +16,11 @@ from app.utils.generate_slug import generate_sku, generate_slug
 from typing import List, Literal, Optional, Sequence
 from app.models.product_image import ProductImage
 from app.models.product_variant import ProductVariant
+from app.services.back_in_stock_service import notify_back_in_stock_subscribers
 
 allowed_sort_order = Literal["asc", "desc"]
-allowed_sort_by = Literal["id", "price", "name", "created_at", "rating", "popularity"]
+allowed_sort_by = Literal["id", "price", "name",
+                          "created_at", "rating", "popularity"]
 
 
 class ProductCrud:
@@ -35,7 +37,8 @@ class ProductCrud:
 
             product_name = create_data.get("name")
             if not product_name:
-                raise ValueError("Product name is required for slug generation.")
+                raise ValueError(
+                    "Product name is required for slug generation.")
 
             gen_slug = generate_slug(self.db, product_name, context="product")
             gen_sku = generate_sku(product_name)
@@ -238,7 +241,8 @@ class ProductCrud:
         """
         Cursor-based pagination for products, ordered by id descending.
         """
-        stmt = select(Product).where(Product.status == "active").order_by(Product.id.desc())
+        stmt = select(Product).where(Product.status ==
+                                     "active").order_by(Product.id.desc())
         if cursor is not None:
             stmt = stmt.where(Product.id < cursor)
 
@@ -291,7 +295,8 @@ class ProductCrud:
 
             old_price = float(product.price)
             new_price_val = update_data.get("price")
-            new_price = float(new_price_val) if new_price_val is not None else old_price
+            new_price = float(
+                new_price_val) if new_price_val is not None else old_price
 
             if new_price != old_price:
                 from app.models.price_history import PriceHistory
@@ -304,7 +309,10 @@ class ProductCrud:
                 self.db.add(history)
 
             if "name" in update_data and "slug" not in update_data:
-                update_data["slug"] = generate_slug(self.db, update_data["name"], context="product")
+                update_data["slug"] = generate_slug(
+                    self.db, update_data["name"], context="product")
+
+            old_stock_quantity = product.stock_quantity
 
             stmt = (
                 update(Product)
@@ -314,6 +322,16 @@ class ProductCrud:
             )
 
             updated = self.db.execute(stmt).scalar_one_or_none()
+
+            if updated is not None and "stock_quantity" in update_data:
+                notify_back_in_stock_subscribers(
+                    self.db,
+                    product_id=id,
+                    variant_id=None,
+                    old_quantity=old_stock_quantity,
+                    new_quantity=updated.stock_quantity,
+                )
+
             self.db.commit()
             return updated
         except IntegrityError as e:
@@ -367,7 +385,8 @@ class ProductCrud:
             select(Product.name)
             .where(Product.status == "active")
             .where(Product.name.ilike(contains_pattern))
-            .where(~Product.name.ilike(search_pattern))  # Exclude prefix matches
+            # Exclude prefix matches
+            .where(~Product.name.ilike(search_pattern))
             .distinct()
             .limit(remaining)
         )
@@ -387,7 +406,8 @@ class ProductCrud:
         if not product:
             raise ProductException(f"Product {product_id} not found")
         if product.stock_quantity < item_quantity:
-            raise ProductException(f"Insufficient stock for product {product_id}")
+            raise ProductException(
+                f"Insufficient stock for product {product_id}")
 
         product.stock_quantity -= item_quantity
         self.db.add(product)
@@ -436,7 +456,8 @@ class ProductCrud:
         products = (
             self.db.query(Product)
             .filter(
-                and_(Product.stock_quantity > 0, Product.stock_quantity < threshold)
+                and_(Product.stock_quantity > 0,
+                     Product.stock_quantity < threshold)
             )
             .order_by(Product.stock_quantity.asc())
             .all()
@@ -445,18 +466,28 @@ class ProductCrud:
 
     def bulk_update_inventory(self, updates: List[BulkInventoryUpdateItem]):
         """Bulk update product inventory"""
+
         updated_count = 0
         failed_products = []
 
         for item in updates:
             product = (
-                self.db.query(Product).filter(Product.id == item.product_id).first()
+                self.db.query(Product).filter(
+                    Product.id == item.product_id).first()
             )
             if not product:
                 failed_products.append(item.product_id)
                 continue
 
+            old_quantity = product.stock_quantity
             product.stock_quantity = item.stock_quantity
+            notify_back_in_stock_subscribers(
+                self.db,
+                product_id=product.id,
+                variant_id=None,
+                old_quantity=old_quantity,
+                new_quantity=item.stock_quantity,
+            )
             updated_count += 1
 
         self.db.commit()
@@ -464,14 +495,16 @@ class ProductCrud:
         return updated_count, failed_products
 
     def add_product_image(self, product_id: int, url: str, is_primary: bool = False, alt_text: Optional[str] = None) -> ProductImage:
-        image = ProductImage(product_id=product_id, url=url, is_primary=is_primary, alt_text=alt_text)
+        image = ProductImage(product_id=product_id, url=url,
+                             is_primary=is_primary, alt_text=alt_text)
         self.db.add(image)
         self.db.commit()
         self.db.refresh(image)
         return image
 
     def get_product_images(self, product_id: int) -> Sequence[ProductImage]:
-        stmt = select(ProductImage).where(ProductImage.product_id == product_id).order_by(ProductImage.display_order)
+        stmt = select(ProductImage).where(ProductImage.product_id ==
+                                          product_id).order_by(ProductImage.display_order)
         return self.db.scalars(stmt).all()
 
     def delete_product_image(self, image_id: int) -> bool:
@@ -483,7 +516,8 @@ class ProductCrud:
         return True
 
     def add_product_variant(self, product_id: int, variant_dto: ProductVariantCreate) -> ProductVariant:
-        variant = ProductVariant(product_id=product_id, **variant_dto.model_dump())
+        variant = ProductVariant(
+            product_id=product_id, **variant_dto.model_dump())
         self.db.add(variant)
         try:
             self.db.commit()
@@ -494,7 +528,8 @@ class ProductCrud:
             raise ProductException("Variant sku already exists") from e
 
     def get_product_variants(self, product_id: int) -> Sequence[ProductVariant]:
-        stmt = select(ProductVariant).where(ProductVariant.product_id == product_id)
+        stmt = select(ProductVariant).where(
+            ProductVariant.product_id == product_id)
         return self.db.scalars(stmt).all()
 
     def update_product_variant(self, variant_id: int, variant_dto: ProductVariantUpdate) -> ProductVariant | None:
@@ -502,14 +537,32 @@ class ProductCrud:
         if not update_data:
             return self.db.get(ProductVariant, variant_id)
 
+        old_stock_quantity = None
+        if "stock_quantity" in update_data:
+            existing = self.db.get(ProductVariant, variant_id)
+            if existing:
+                old_stock_quantity = existing.stock_quantity
+
         try:
-            stmt = update(ProductVariant).where(ProductVariant.id == variant_id).values(**update_data).returning(ProductVariant)
+            stmt = update(ProductVariant).where(ProductVariant.id == variant_id).values(
+                **update_data).returning(ProductVariant)
             updated = self.db.execute(stmt).scalar_one_or_none()
+
+            if updated is not None and old_stock_quantity is not None:
+                notify_back_in_stock_subscribers(
+                    self.db,
+                    product_id=int(updated.product_id),
+                    variant_id=variant_id,
+                    old_quantity=int(old_stock_quantity),
+                    new_quantity=int(updated.stock_quantity),
+                )
+
             self.db.commit()
             return updated
         except IntegrityError as e:
             self.db.rollback()
-            raise ProductException("Variant update failed due to duplicate sku") from e
+            raise ProductException(
+                "Variant update failed due to duplicate sku") from e
 
     def delete_product_variant(self, variant_id: int) -> bool:
         stmt = delete(ProductVariant).where(ProductVariant.id == variant_id)
@@ -519,9 +572,9 @@ class ProductCrud:
         self.db.commit()
         return True
 
-
     def add_product_relation(self, product_id: int, relation_dto: ProductRelationCreate) -> ProductRelation:
-        relation = ProductRelation(product_id=product_id, **relation_dto.model_dump())
+        relation = ProductRelation(
+            product_id=product_id, **relation_dto.model_dump())
         self.db.add(relation)
         try:
             self.db.commit()
@@ -533,7 +586,8 @@ class ProductCrud:
 
     def get_product_relations(self, product_id: int) -> Sequence['ProductRelation']:
         from app.models.product_relation import ProductRelation
-        stmt = select(ProductRelation).where(ProductRelation.product_id == product_id)
+        stmt = select(ProductRelation).where(
+            ProductRelation.product_id == product_id)
         return self.db.scalars(stmt).all()
 
     def delete_product_relation(self, relation_id: int) -> bool:
