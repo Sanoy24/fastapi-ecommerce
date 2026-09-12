@@ -59,9 +59,10 @@ async def process_outbox_events_task(ctx):
     single transient failure (a broker hiccup, a network blip) would strand
     an event with no automatic path back to being processed.
 
-    "product.back_in_stock" events actually send an email once
-    successfully "published" (see below) — every other topic just logs,
-    same as before, since there's still no real broker to hand off to.
+    "product.back_in_stock" and "product.price_drop" events actually send
+    an email once successfully "published" (see below) — every other topic
+    just logs, same as before, since there's still no real broker to hand
+    off to.
     """
     logger.info("Starting outbox event processing")
 
@@ -72,6 +73,7 @@ async def process_outbox_events_task(ctx):
     def _process():
         now = utcnow()
         back_in_stock_payloads = []
+        price_drop_payloads = []
         with SessionLocal() as db:
             events = (
                 db.execute(
@@ -103,6 +105,8 @@ async def process_outbox_events_task(ctx):
                     event.processed_at = func.now()
                     if event.topic == "product.back_in_stock":
                         back_in_stock_payloads.append(dict(event.payload))
+                    elif event.topic == "product.price_drop":
+                        price_drop_payloads.append(dict(event.payload))
                 except Exception as e:
                     event.retry_count += 1
                     if event.retry_count >= MAX_OUTBOX_ATTEMPTS:
@@ -122,11 +126,11 @@ async def process_outbox_events_task(ctx):
                         event.next_attempt_at = now + delay
                     event.error_message = str(e)
             db.commit()
-        return back_in_stock_payloads
+        return back_in_stock_payloads, price_drop_payloads
 
     # Run the sync DB code in an executor
     loop = asyncio.get_running_loop()
-    back_in_stock_payloads = await loop.run_in_executor(None, _process)
+    back_in_stock_payloads, price_drop_payloads = await loop.run_in_executor(None, _process)
 
     if back_in_stock_payloads:
         from app.services.email_service import send_back_in_stock_email
@@ -136,6 +140,18 @@ async def process_outbox_events_task(ctx):
                 to_address=payload["email"],
                 product_name=payload["product_name"],
                 product_slug=payload["product_slug"],
+            )
+
+    if price_drop_payloads:
+        from app.services.email_service import send_price_drop_email
+
+        for payload in price_drop_payloads:
+            await send_price_drop_email(
+                to_address=payload["email"],
+                product_name=payload["product_name"],
+                product_slug=payload["product_slug"],
+                old_price=payload["old_price"],
+                new_price=payload["new_price"],
             )
 
     logger.info("Finished outbox event processing")

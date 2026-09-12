@@ -268,3 +268,38 @@ async def send_back_in_stock_email(to_address: str, product_name: str, product_s
         html_body=html_body,
         text_body=text_body,
     )
+
+
+async def send_price_drop_email(
+    to_address: str, product_name: str, product_slug: str, old_price: float, new_price: float
+) -> None:
+    """Notify a customer that a product they subscribed to has dropped in
+    price. Sent by app.workers.arq_worker.process_outbox_events_task for
+    "product.price_drop" outbox events — see
+    app.services.price_drop_service.notify_price_drop_subscribers for where
+    those get written.
+    """
+    product_url = f"{settings.FRONTEND_URL}/products/{product_slug}"
+
+    html_body = f"""
+    <html><body>
+    <h2>Price drop on {product_name}! 🎉</h2>
+    <p>Good news — an item you were watching just got cheaper: <s>${old_price:.2f}</s> now ${new_price:.2f}.</p>
+    <p><a href="{product_url}" style="background:#4F46E5;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">
+        View {product_name}
+    </a></p>
+    <p>Prices can change again, so it's worth grabbing it soon.</p>
+    </body></html>
+    """
+    text_body = (
+        f"Price drop on {product_name}!\n\n"
+        f"An item you were watching just got cheaper: ${old_price:.2f} -> ${new_price:.2f}\n"
+        f"{product_url}\n"
+        f"Prices can change again, so it's worth grabbing it soon."
+    )
+    await send_email(
+        to_address=to_address,
+        subject=f"Price drop on {product_name}!",
+        html_body=html_body,
+        text_body=text_body,
+    )

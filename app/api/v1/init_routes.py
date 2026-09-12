@@ -19,6 +19,7 @@ from app.api.v1.routes import (
     shipping,
     promotion,
     back_in_stock,
+    price_drop,
 )
 
 
@@ -35,6 +36,7 @@ def init_routes(app: FastAPI):
     app.include_router(router=admin.router, prefix="/admin")
     app.include_router(router=wishlist.router, prefix="/wishlist")
     app.include_router(router=back_in_stock.router, prefix="/back-in-stock")
+    app.include_router(router=price_drop.router, prefix="/price-drop-alerts")
     app.include_router(router=elastic.router, prefix="/elastic")
     app.include_router(router=coupon.router, prefix="/coupons")
     app.include_router(router=promotion.router, prefix="/promotions")

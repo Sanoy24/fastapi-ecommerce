@@ -17,6 +17,7 @@ from typing import List, Literal, Optional, Sequence
 from app.models.product_image import ProductImage
 from app.models.product_variant import ProductVariant
 from app.services.back_in_stock_service import notify_back_in_stock_subscribers
+from app.services.price_drop_service import notify_price_drop_subscribers
 
 allowed_sort_order = Literal["asc", "desc"]
 allowed_sort_by = Literal["id", "price", "name",
@@ -313,6 +314,10 @@ class ProductCrud:
                     self.db, update_data["name"], context="product")
 
             old_stock_quantity = product.stock_quantity
+            price_fields_changed = bool(
+                {"price", "sale_price", "sale_starts_at", "sale_ends_at"} & update_data.keys()
+            )
+            old_effective_price = product.effective_price if price_fields_changed else None
 
             stmt = (
                 update(Product)
@@ -330,6 +335,14 @@ class ProductCrud:
                     variant_id=None,
                     old_quantity=old_stock_quantity,
                     new_quantity=updated.stock_quantity,
+                )
+
+            if updated is not None and old_effective_price is not None:
+                notify_price_drop_subscribers(
+                    self.db,
+                    product_id=id,
+                    old_effective_price=old_effective_price,
+                    new_effective_price=updated.effective_price,
                 )
 
             self.db.commit()
