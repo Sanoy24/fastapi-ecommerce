@@ -1,6 +1,9 @@
 import asyncio
 import os
+from collections import Counter, defaultdict
 from datetime import timedelta
+from itertools import combinations
+from typing import Dict, Set, Tuple
 from arq.connections import RedisSettings
 from arq.cron import cron
 from app.core.logger import logger
@@ -8,6 +11,9 @@ from app.db.database import SessionLocal
 from app.models.outbox_event import OutboxEvent
 from app.utils.time import utcnow
 from sqlalchemy import select, func, delete
+from app.models.order import Order
+from app.models.order_item import OrderItem
+from app.models.product_relation import ProductRelation
 
 # Previously this function existed but was never added to WorkerSettings
 # below, so no pending OutboxEvent row was ever processed — every order
@@ -153,7 +159,8 @@ async def cleanup_completed_outbox_events_task(ctx):
 
     loop = asyncio.get_running_loop()
     deleted = await loop.run_in_executor(None, _process)
-    logger.info(f"Finished outbox cleanup — removed {deleted} completed event(s)")
+    logger.info(
+        f"Finished outbox cleanup — removed {deleted} completed event(s)")
 
 
 async def send_order_confirmation_email_task(
@@ -185,7 +192,8 @@ async def send_verification_email_task(ctx, to_address: str, verification_token:
 async def send_guest_order_claim_email_task(ctx, to_address: str, order_number: str, claim_token: str):
     from app.services.email_service import send_guest_order_claim_email
 
-    logger.info(f"ARQ: Sending guest order claim link for order {order_number} to {to_address}")
+    logger.info(
+        f"ARQ: Sending guest order claim link for order {order_number} to {to_address}")
     await send_guest_order_claim_email(to_address, order_number, claim_token)
     return True
 
@@ -248,10 +256,123 @@ async def detect_abandoned_carts_task(ctx):
     from app.services.email_service import send_abandoned_cart_email
 
     for email, item_count in to_notify:
-        logger.info(f"Sending abandoned-cart email to {email} ({item_count} item(s))")
+        logger.info(
+            f"Sending abandoned-cart email to {email} ({item_count} item(s))")
         await send_abandoned_cart_email(to_address=email, item_count=item_count)
 
-    logger.info(f"Finished abandoned cart detection — notified {len(to_notify)} cart(s)")
+    logger.info(
+        f"Finished abandoned cart detection — notified {len(to_notify)} cart(s)")
+
+
+# A pair only counts once it's shown up in at least this many successfully
+# paid orders — a single order shouldn't be enough to manufacture a
+# "relation" out of what could just be coincidence.
+FBT_MIN_CO_OCCURRENCE = 2
+# How many related products to keep per product, ranked by co-occurrence
+# count — matches ProductRelation being a set of individual rows rather
+# than something with its own inherent size limit.
+FBT_TOP_N = 5
+
+
+async def compute_frequently_bought_together_task(ctx):
+    """
+    Recompute ProductRelation.frequently_bought_together rows from actual
+    purchase history, instead of that relation type only ever being
+    populated by an admin typing it in by hand.
+
+    Counts, across every successfully paid order, how often each pair of
+    distinct products shows up together in the same order (OrderItem grouped
+    by order_id — quantity doesn't matter, only "was this product in this
+    order"), keeps the top FBT_TOP_N co-purchased products per product
+    provided they cleared FBT_MIN_CO_OCCURRENCE, and reconciles that against
+    the auto-generated rows already in the table: missing ones are added,
+    ones that no longer make the cut are removed.
+
+    Only rows with is_auto_generated=True are ever touched here, so a
+    relation an admin entered by hand — even one of type
+    frequently_bought_together — is never added to, changed, or deleted by
+    this job; see ProductRelation.is_auto_generated.
+    """
+    logger.info("Starting frequently-bought-together computation")
+
+    def _process() -> Tuple[int, int]:
+        with SessionLocal() as db:
+            rows = db.execute(
+                select(OrderItem.order_id, OrderItem.product_id)
+                .join(Order, Order.id == OrderItem.order_id)
+                .where(Order.payment_status == "success")
+                .distinct()
+            ).all()
+
+            products_by_order: Dict[int, Set[int]] = defaultdict(set)
+            for order_id, product_id in rows:
+                products_by_order[order_id].add(product_id)
+
+            pair_counts: Counter[Tuple[int, int]] = Counter()
+            for product_ids in products_by_order.values():
+                for a, b in combinations(sorted(product_ids), 2):
+                    pair_counts[(a, b)] += 1
+
+            co_occurrence: Dict[int, Counter[int]] = defaultdict(Counter)
+            for (a, b), count in pair_counts.items():
+                if count < FBT_MIN_CO_OCCURRENCE:
+                    continue
+                co_occurrence[a][b] = count
+                co_occurrence[b][a] = count
+
+            wanted_by_product: Dict[int, Set[int]] = {
+                product_id: {
+                    related_id for related_id, _ in related_counts.most_common(FBT_TOP_N)
+                }
+                for product_id, related_counts in co_occurrence.items()
+            }
+
+            existing_auto = (
+                db.execute(
+                    select(ProductRelation).where(
+                        ProductRelation.relation_type == "frequently_bought_together",
+                        ProductRelation.is_auto_generated.is_(True),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+            existing_by_product: Dict[int, Dict[int,
+                                                ProductRelation]] = defaultdict(dict)
+            for rel in existing_auto:
+                existing_by_product[rel.product_id][rel.related_product_id] = rel
+
+            added = 0
+            removed = 0
+            for product_id in set(wanted_by_product) | set(existing_by_product):
+                wanted = wanted_by_product.get(product_id, set())
+                current = existing_by_product.get(product_id, {})
+
+                for related_id, rel in current.items():
+                    if related_id not in wanted:
+                        db.delete(rel)
+                        removed += 1
+
+                for related_id in wanted - set(current):
+                    db.add(
+                        ProductRelation(
+                            product_id=product_id,
+                            related_product_id=related_id,
+                            relation_type="frequently_bought_together",
+                            is_auto_generated=True,
+                        )
+                    )
+                    added += 1
+
+            db.commit()
+            return added, removed
+
+    loop = asyncio.get_running_loop()
+    added, removed = await loop.run_in_executor(None, _process)
+    logger.info(
+        f"Finished frequently-bought-together computation — added {added}, removed {removed}"
+    )
 
 
 async def startup(ctx):
@@ -289,15 +410,20 @@ class WorkerSettings:
         detect_abandoned_carts_task,
         process_outbox_events_task,
         cleanup_completed_outbox_events_task,
+        compute_frequently_bought_together_task,
     ]
 
     cron_jobs = [
-        cron(detect_abandoned_carts_task, hour={0, 12}, minute=0),  # run twice a day
+        cron(detect_abandoned_carts_task, hour={
+             0, 12}, minute=0),  # run twice a day
         # Twice a minute: the outbox pattern's whole point is a business
         # transaction and its side effect committing together, so the
         # side effect (here, simulated) should follow close behind.
         cron(process_outbox_events_task, second={0, 30}),
-        cron(cleanup_completed_outbox_events_task, hour=3, minute=0),  # once a day
+        cron(cleanup_completed_outbox_events_task,
+             hour=3, minute=0),  # once a day
+        cron(compute_frequently_bought_together_task,
+             hour=1, minute=0),  # once a day
     ]
     redis_settings = RedisSettings(host=host, port=port, database=database)
     on_startup = startup

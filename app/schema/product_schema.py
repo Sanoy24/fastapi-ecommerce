@@ -107,6 +107,7 @@ class ProductRelationResponse(BaseModel):
     product_id: int
     related_product_id: int
     relation_type: str
+    is_auto_generated: bool = False
     related_product: ProductResponse
 
     model_config = {"from_attributes": True}
