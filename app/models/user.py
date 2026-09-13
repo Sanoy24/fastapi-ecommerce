@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     Integer,
+    Numeric,
     func,
     Enum as SQLEnum,
 )
@@ -51,6 +52,13 @@ class User(Base):
     # Fast-read running total — see app/models/loyalty_transaction.py for
     # the ledger of earn/redeem/reversal entries that back this number.
     loyalty_points_balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+    # Fast-read running total, in settings.BASE_CURRENCY_CODE — see
+    # app/models/store_credit_transaction.py for the ledger of
+    # redeem_gift_card/spend/reversal entries that back this number.
+    store_credit_balance: Mapped[float] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0, server_default="0"
+    )
 
     # Relationships
     addresses: Mapped[List["Address"]] = relationship(

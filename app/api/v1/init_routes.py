@@ -25,6 +25,7 @@ from app.api.v1.routes import (
     subscription,
     currency,
     loyalty,
+    gift_card,
 )
 
 
@@ -43,6 +44,9 @@ def init_routes(app: FastAPI):
     app.include_router(router=currency.router)
     app.include_router(router=currency.admin_router)
     app.include_router(router=loyalty.router)
+    app.include_router(router=gift_card.router)
+    app.include_router(router=gift_card.admin_router)
+    app.include_router(router=gift_card.wallet_router)
     app.include_router(router=admin.router, prefix="/admin")
     app.include_router(router=wishlist.router, prefix="/wishlist")
     app.include_router(router=back_in_stock.router, prefix="/back-in-stock")

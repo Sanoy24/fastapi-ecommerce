@@ -37,6 +37,8 @@ from .oauth_account import OAuthAccount
 from .subscription import Subscription
 from .currency import Currency
 from .loyalty_transaction import LoyaltyTransaction
+from .gift_card import GiftCard
+from .store_credit_transaction import StoreCreditTransaction
 
 __all__ = [
     "User",
@@ -80,4 +82,6 @@ __all__ = [
     "Subscription",
     "Currency",
     "LoyaltyTransaction",
+    "GiftCard",
+    "StoreCreditTransaction",
 ]

@@ -68,6 +68,16 @@ def calculate_points_discount(raw_subtotal: float, points_redeemed: int) -> floa
     return min(raw_subtotal, points_redeemed * settings.POINTS_REDEMPTION_VALUE)
 
 
+def calculate_store_credit_discount(raw_subtotal: float, store_credit_applied: float) -> float:
+    """Discount from applying store_credit_applied (already a currency
+    amount, not a points count) toward checkout, capped at raw_subtotal for
+    the same reason calculate_points_discount is — stacking with a
+    coupon/points/promotion discount is still capped at the call site."""
+    if store_credit_applied <= 0:
+        return 0.0
+    return min(raw_subtotal, store_credit_applied)
+
+
 def calculate_promotion_discount(db: Session, items: List[CartItem]) -> Tuple[float, List[str]]:
     """Evaluate active promotions against the given items.
 

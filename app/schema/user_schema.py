@@ -32,6 +32,7 @@ class UserPublic(BaseModel):
     mfa_enabled: bool = False
     has_password: bool = True
     loyalty_points_balance: int = 0
+    store_credit_balance: float = 0.0
     addresses: list[AddressPublic] = []
     created_at: datetime
     updated_at: datetime

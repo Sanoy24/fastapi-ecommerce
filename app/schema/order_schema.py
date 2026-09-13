@@ -71,6 +71,7 @@ class OrderResponse(BaseModel):
     exchange_rate_at_purchase: float = 1.0
     points_redeemed: int = 0
     points_earned: int = 0
+    store_credit_applied: float = 0.0
     notes: Optional[str] = None
     cancelled_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None
