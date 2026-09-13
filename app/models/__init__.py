@@ -30,6 +30,8 @@ from .promotion import Promotion
 from .review_vote import ReviewVote
 from .back_in_stock_subscription import BackInStockSubscription
 from .price_drop_subscription import PriceDropSubscription
+from .product_question import ProductQuestion
+from .product_answer import ProductAnswer
 
 __all__ = [
     "User",
@@ -66,4 +68,6 @@ __all__ = [
     "ReviewVote",
     "BackInStockSubscription",
     "PriceDropSubscription",
+    "ProductQuestion",
+    "ProductAnswer",
 ]
