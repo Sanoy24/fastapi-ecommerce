@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, List, Optional, Protocol, Tuple
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.cart_item import CartItem
 from app.models.promotion import Promotion
 
@@ -54,6 +55,17 @@ def calculate_coupon_discount(raw_subtotal: float, coupon) -> float:
     if coupon.discount_type == "fixed":
         return float(coupon.discount_value)
     return 0.0
+
+
+def calculate_points_discount(raw_subtotal: float, points_redeemed: int) -> float:
+    """Discount from redeeming points_redeemed at
+    settings.POINTS_REDEMPTION_VALUE per point, capped at raw_subtotal so a
+    redemption alone can never make a cart/order total negative (stacking
+    with a coupon/promotion discount is still capped at the call site, the
+    same way calculate_coupon_discount's result is)."""
+    if points_redeemed <= 0:
+        return 0.0
+    return min(raw_subtotal, points_redeemed * settings.POINTS_REDEMPTION_VALUE)
 
 
 def calculate_promotion_discount(db: Session, items: List[CartItem]) -> Tuple[float, List[str]]:

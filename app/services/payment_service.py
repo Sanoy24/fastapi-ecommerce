@@ -13,6 +13,8 @@ from app.models.payment import Payment
 from app.models.payment_event import PaymentEvent
 from app.models.inventory_reservation import InventoryReservation
 from app.models.inventory_transaction import InventoryTransaction
+from app.models.loyalty_transaction import LoyaltyTransaction
+from app.models.user import User
 from app.utils.currency import convert_from_base, to_stripe_amount
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -235,6 +237,25 @@ class PaymentService:
                 for res in reservations:
                     self.db.delete(res)
 
+                # No points for a guest order — there's no account to
+                # credit them to. order.total_amount is always in the base
+                # currency (see Order.currency_code), so no conversion is
+                # needed here the way charging Stripe above needs one.
+                if order.user_id:
+                    points_earned = int(float(order.total_amount) * settings.POINTS_EARNED_PER_BASE_CURRENCY_UNIT)
+                    if points_earned > 0:
+                        user = self.db.get(User, order.user_id)
+                        if user:
+                            user.loyalty_points_balance += points_earned
+                            order.points_earned = points_earned
+                            self.db.add(LoyaltyTransaction(
+                                user_id=order.user_id,
+                                order_id=order.id,
+                                points=points_earned,
+                                transaction_type="earn",
+                                note=f"Earned from order {order.order_number}",
+                            ))
+
                 self.db.commit()
 
     def _handle_failed_payment(self, payment_intent):
@@ -310,6 +331,42 @@ class PaymentService:
 
         # update order status
         self.order_crud.update_order_status(order.id, "refunded", admin_id=admin_id)
+
+        # Reverse both sides of this order's points activity. A partial
+        # dollar refund still flips the order fully to "refunded" (see
+        # update_order_status above and the amount-vs-remaining-balance
+        # check earlier in this method, which only ever allows a single
+        # refund per order) so this reversal is unconditional, not scaled
+        # to the refunded amount.
+        if order.user_id:
+            user = self.db.get(User, order.user_id)
+            if user:
+                if order.points_earned > 0:
+                    # Capped at the user's current balance: they may have
+                    # already spent some or all of what this order earned
+                    # on a later redemption, and clawing back more than
+                    # they still have would incorrectly push the balance
+                    # negative for points that are simply gone.
+                    clawback = min(order.points_earned, user.loyalty_points_balance)
+                    if clawback > 0:
+                        user.loyalty_points_balance -= clawback
+                        self.db.add(LoyaltyTransaction(
+                            user_id=order.user_id,
+                            order_id=order.id,
+                            points=-clawback,
+                            transaction_type="reversal",
+                            note=f"Points earned on order {order.order_number} clawed back after refund",
+                        ))
+                if order.points_redeemed > 0:
+                    user.loyalty_points_balance += order.points_redeemed
+                    self.db.add(LoyaltyTransaction(
+                        user_id=order.user_id,
+                        order_id=order.id,
+                        points=order.points_redeemed,
+                        transaction_type="reversal",
+                        note=f"Points redeemed on order {order.order_number} restored after refund",
+                    ))
+
         self.db.commit()
         return refund
 

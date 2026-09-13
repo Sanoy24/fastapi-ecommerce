@@ -10,7 +10,12 @@ from app.core.logger import logger
 from app.core.exceptions import ProductException
 from app.crud.product import ProductCrud
 from app.crud.cart_item import CartCrud
-from app.services.pricing import calculate_coupon_discount, calculate_promotion_discount, get_unit_price
+from app.services.pricing import (
+    calculate_coupon_discount,
+    calculate_points_discount,
+    calculate_promotion_discount,
+    get_unit_price,
+)
 
 
 class CartService:
@@ -96,8 +101,9 @@ class CartService:
 
         coupon_discount = calculate_coupon_discount(raw_subtotal, coupon)
         promo_discount, applied_promotions = calculate_promotion_discount(self.db, list(cart.cart_items))
+        points_discount = calculate_points_discount(raw_subtotal, cart.points_redeemed)
 
-        subtotal = max(0.0, raw_subtotal - coupon_discount - promo_discount)
+        subtotal = max(0.0, raw_subtotal - coupon_discount - promo_discount - points_discount)
 
         total_items = sum(item.quantity for item in cart.cart_items)
 
@@ -182,6 +188,9 @@ class CartService:
             "estimated_tax": estimated_tax,
             "total_amount": total_amount,
             "applied_promotions": applied_promotions,
+            "points_redeemed": cart.points_redeemed,
+            "points_discount_amount": points_discount,
+            "loyalty_points_balance": cart.user.loyalty_points_balance if cart.user_id else 0,
             "currency_code": currency_code,
             "exchange_rate_to_base": exchange_rate,
             "display_subtotal": convert_from_base(raw_subtotal, exchange_rate, currency_code),
@@ -207,6 +216,33 @@ class CartService:
 
     def remove_coupon(self, cart: Cart) -> Cart:
         cart.coupon_id = None
+        self.db.commit()
+        self.db.refresh(cart)
+        return cart
+
+    def redeem_points(self, cart: Cart, available_balance: int, points: int) -> Cart:
+        """Set how many loyalty points to redeem toward this cart's total.
+
+        available_balance comes from the caller's already-loaded User (see
+        cart.py) rather than being looked up here — it's re-validated again
+        against the live balance at checkout (OrderCrud._calculate_discount)
+        regardless, since a customer can sit on a cart for a while before
+        placing the order.
+        """
+        if points <= 0:
+            raise HTTPException(status_code=400, detail="Points must be positive")
+        if points > available_balance:
+            raise HTTPException(
+                status_code=400, detail=f"Insufficient loyalty points balance: you have {available_balance}"
+            )
+
+        cart.points_redeemed = points
+        self.db.commit()
+        self.db.refresh(cart)
+        return cart
+
+    def remove_points(self, cart: Cart) -> Cart:
+        cart.points_redeemed = 0
         self.db.commit()
         self.db.refresh(cart)
         return cart

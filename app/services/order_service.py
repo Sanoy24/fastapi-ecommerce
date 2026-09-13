@@ -200,6 +200,24 @@ class OrderService:
         )
         self.db.add(event)
 
+        # Only pending orders reach this point (checked above), and payment
+        # never succeeds before "paid" — so points_earned is always still 0
+        # here; only a redemption needs restoring, never a clawback.
+        if order.points_redeemed > 0:
+            from app.models.loyalty_transaction import LoyaltyTransaction
+            from app.models.user import User
+
+            user = self.db.get(User, user_id)
+            if user:
+                user.loyalty_points_balance += order.points_redeemed
+                self.db.add(LoyaltyTransaction(
+                    user_id=user_id,
+                    order_id=order.id,
+                    points=order.points_redeemed,
+                    transaction_type="reversal",
+                    note=f"Points redeemed on order {order.order_number} restored after cancellation",
+                ))
+
         order.status = "cancelled"
         order.payment_status = "failed"
         order.cancelled_at = func.current_timestamp()

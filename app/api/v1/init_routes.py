@@ -24,6 +24,7 @@ from app.api.v1.routes import (
     saved_payment_method,
     subscription,
     currency,
+    loyalty,
 )
 
 
@@ -41,6 +42,7 @@ def init_routes(app: FastAPI):
     app.include_router(router=subscription.router, prefix="/subscriptions")
     app.include_router(router=currency.router)
     app.include_router(router=currency.admin_router)
+    app.include_router(router=loyalty.router)
     app.include_router(router=admin.router, prefix="/admin")
     app.include_router(router=wishlist.router, prefix="/wishlist")
     app.include_router(router=back_in_stock.router, prefix="/back-in-stock")

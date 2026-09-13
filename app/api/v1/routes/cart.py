@@ -1,5 +1,5 @@
 from typing import Annotated, Any
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from fastapi.responses import JSONResponse
 from app.dependencies import get_cart_service_dep, get_optional_user
@@ -7,6 +7,7 @@ from app.schema.user_schema import UserPublic
 from app.services.cart_service import CartService
 from app.schema.cart_schema import CartItemCreate, CartItemUpdate
 from app.schema.currency_schema import SetCartCurrencyRequest
+from app.schema.loyalty_schema import RedeemPointsRequest
 from app.utils.session import generate_session_id
 from app.core.logger import logger
 
@@ -147,6 +148,35 @@ async def remove_coupon(
 
     cart_service.remove_coupon(cart)
     return {"message": "Coupon removed successfully"}
+
+
+@router.put("/points", summary="Redeem loyalty points toward this cart's total")
+async def redeem_points(
+    data: RedeemPointsRequest,
+    current_user: user_dep,
+    cart_service: cart_dependency,
+):
+    # There's no anonymous points balance to redeem against — unlike
+    # coupons/currency, this has no guest-cart path at all.
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Sign in to redeem loyalty points")
+
+    cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
+    cart_service.redeem_points(cart, current_user.loyalty_points_balance, data.points)
+    return {"message": f"{data.points} points redeemed"}
+
+
+@router.delete("/points", summary="Remove redeemed loyalty points from this cart")
+async def remove_points(
+    current_user: user_dep,
+    cart_service: cart_dependency,
+):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Sign in to manage loyalty points")
+
+    cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
+    cart_service.remove_points(cart)
+    return {"message": "Points redemption removed"}
 
 
 @router.put("/currency", summary="Set the currency to check out in")

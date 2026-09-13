@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, DateTime, String, func
+from sqlalchemy import ForeignKey, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import List, Optional
 from datetime import datetime
@@ -23,6 +23,12 @@ class Cart(Base):
     currency_code: Mapped[Optional[str]] = mapped_column(
         ForeignKey("currencies.code", ondelete="SET NULL"), nullable=True
     )
+    # How many loyalty points the customer wants to redeem toward this
+    # cart's total — only ever set for a logged-in user (there's no
+    # anonymous points balance to redeem against), re-validated against
+    # the user's live balance at GET /cart and again at checkout, the same
+    # two-stage validation coupon_id gets.
+    points_redeemed: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     session_id: Mapped[str] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.current_timestamp()
