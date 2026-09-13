@@ -20,7 +20,9 @@ async def create_payment_intent(
     current_user: UserPublic = Depends(get_current_user),
     idempotency_key: str | None = Depends(check_idempotency),
 ):
-    response_data = payment_service.create_payment_intent(current_user.id, payment_data.order_id)
+    response_data = payment_service.create_payment_intent(
+        current_user.id, payment_data.order_id, payment_data.saved_payment_method_id
+    )
 
     if idempotency_key:
         await cache_idempotent_response(idempotency_key, response_data.model_dump())

@@ -38,6 +38,12 @@ class User(Base):
     totp_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
+    # Created lazily on first use (see
+    # SavedPaymentMethodService._get_or_create_stripe_customer) rather than
+    # at registration — most users never save a card, so most rows would
+    # never need this.
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
+
     # Relationships
     addresses: Mapped[List["Address"]] = relationship(
         "Address", back_populates="user", cascade="all, delete-orphan"

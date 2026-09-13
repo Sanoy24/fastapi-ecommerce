@@ -32,6 +32,7 @@ from .back_in_stock_subscription import BackInStockSubscription
 from .price_drop_subscription import PriceDropSubscription
 from .product_question import ProductQuestion
 from .product_answer import ProductAnswer
+from .saved_payment_method import SavedPaymentMethod
 
 __all__ = [
     "User",
@@ -70,4 +71,5 @@ __all__ = [
     "PriceDropSubscription",
     "ProductQuestion",
     "ProductAnswer",
+    "SavedPaymentMethod",
 ]

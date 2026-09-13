@@ -1,3 +1,5 @@
+from typing import Optional
+
 import stripe
 from fastapi import HTTPException
 from sqlalchemy import func
@@ -5,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.config import settings
 from app.crud.payment import PaymentCrud
 from app.crud.order import OrderCrud
+from app.crud.saved_payment_method_crud import SavedPaymentMethodCrud
 from app.models.order import Order
 from app.models.payment import Payment
 from app.models.payment_event import PaymentEvent
@@ -20,14 +23,28 @@ class PaymentService:
         self.db = db
         self.payment_crud = PaymentCrud(db)
         self.order_crud = OrderCrud(db)
+        self.saved_payment_method_crud = SavedPaymentMethodCrud(db)
 
-    def create_payment_intent(self, user_id: int, order_id: int):
+    def create_payment_intent(
+        self, user_id: int, order_id: int, saved_payment_method_id: Optional[int] = None
+    ):
         # get order
         order = self.order_crud.get_order_by_id(user_id, order_id)
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
 
-        return self._create_payment_intent_for_order(order)
+        stripe_customer_id = None
+        stripe_payment_method_id = None
+        if saved_payment_method_id is not None:
+            method = self.saved_payment_method_crud.get_by_id(saved_payment_method_id)
+            if not method or method.user_id != user_id:
+                raise HTTPException(status_code=404, detail="Saved payment method not found")
+            stripe_customer_id = self.saved_payment_method_crud.get_user_stripe_customer_id(user_id)
+            stripe_payment_method_id = method.stripe_payment_method_id
+
+        return self._create_payment_intent_for_order(
+            order, stripe_customer_id=stripe_customer_id, stripe_payment_method_id=stripe_payment_method_id
+        )
 
     def create_guest_payment_intent(self, order_number: str, email: str):
         """The guest-checkout equivalent of create_payment_intent.
@@ -42,21 +59,48 @@ class PaymentService:
 
         return self._create_payment_intent_for_order(order)
 
-    def _create_payment_intent_for_order(self, order: Order):
+    def _create_payment_intent_for_order(
+        self,
+        order: Order,
+        stripe_customer_id: Optional[str] = None,
+        stripe_payment_method_id: Optional[str] = None,
+    ):
         if order.payment_status == "success":
             raise HTTPException(status_code=400, detail="Order already paid")
 
-        # Create Stripe PaymentIntent
+        amount = int(order.total_amount * 100)  # Amount in cents
+        metadata = {
+            "order_id": str(order.id),
+            "user_id": str(order.user_id) if order.user_id is not None else "guest",
+        }
+
+        # Pre-attaching a saved card lets the frontend skip re-collecting
+        # card details and go straight to confirming with Stripe.js — it
+        # does not confirm the PaymentIntent itself, so the existing
+        # client-side confirm step and webhook handling below are
+        # unchanged either way.
         try:
-            intent = stripe.PaymentIntent.create(
-                amount=int(order.total_amount * 100),  # Amount in cents
-                currency="usd",
-                metadata={
-                    "order_id": str(order.id),
-                    "user_id": str(order.user_id) if order.user_id is not None else "guest",
-                },
-                automatic_payment_methods={"enabled": True},
-            )
+            if stripe_payment_method_id:
+                # A SavedPaymentMethod row only ever exists after its
+                # user's stripe_customer_id was set (see
+                # SavedPaymentMethodService.get_or_create_stripe_customer_id),
+                # so create_payment_intent above always resolves both
+                # together or neither.
+                assert stripe_customer_id is not None
+                intent = stripe.PaymentIntent.create(
+                    amount=amount,
+                    currency="usd",
+                    metadata=metadata,
+                    customer=stripe_customer_id,
+                    payment_method=stripe_payment_method_id,
+                )
+            else:
+                intent = stripe.PaymentIntent.create(
+                    amount=amount,
+                    currency="usd",
+                    metadata=metadata,
+                    automatic_payment_methods={"enabled": True},
+                )
         except stripe.error.StripeError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
