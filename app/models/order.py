@@ -1,4 +1,4 @@
-from sqlalchemy import CheckConstraint, ForeignKey, Numeric, String, DateTime, func
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, Numeric, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Enum as SQLEnum
 from typing import List, Optional
@@ -92,6 +92,15 @@ class Order(Base):
     notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Loyalty points spent as a discount on this order (deducted from the
+    # user's balance at checkout — see OrderCrud._calculate_discount) and
+    # points credited once payment succeeds (0 until then, and always 0 for
+    # a guest order — see PaymentService._handle_successful_payment). Both
+    # are snapshotted here, not just on User, so refund/cancellation can
+    # reverse exactly what this order did without recomputing it later.
+    points_redeemed: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    points_earned: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship("User", back_populates="orders")

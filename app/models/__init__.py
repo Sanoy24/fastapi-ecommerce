@@ -36,6 +36,7 @@ from .saved_payment_method import SavedPaymentMethod
 from .oauth_account import OAuthAccount
 from .subscription import Subscription
 from .currency import Currency
+from .loyalty_transaction import LoyaltyTransaction
 
 __all__ = [
     "User",
@@ -78,4 +79,5 @@ __all__ = [
     "OAuthAccount",
     "Subscription",
     "Currency",
+    "LoyaltyTransaction",
 ]

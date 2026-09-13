@@ -45,6 +45,13 @@ class Setting(BaseSettings):
     # app/models/currency.py for how other currencies convert from it.
     BASE_CURRENCY_CODE: str = "USD"
 
+    # How many loyalty points a customer earns per 1 unit of order total in
+    # BASE_CURRENCY_CODE — see PaymentService._handle_successful_payment.
+    POINTS_EARNED_PER_BASE_CURRENCY_UNIT: float = 1.0
+    # How much discount (in BASE_CURRENCY_CODE) redeeming 1 point is worth
+    # at checkout — see calculate_points_discount in app/services/pricing.py.
+    POINTS_REDEMPTION_VALUE: float = 0.01
+
     # File storage: "local" or "s3"
     STORAGE_BACKEND: str = "local"
     UPLOAD_DIR: str = "uploads"

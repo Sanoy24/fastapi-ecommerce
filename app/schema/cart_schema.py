@@ -33,6 +33,9 @@ class CartResponse(BaseModel):
     discount_amount: float = 0.0
     estimated_tax: float = 0.0
     total_amount: float
+    points_redeemed: int = 0
+    points_discount_amount: float = 0.0
+    loyalty_points_balance: int = 0
     # subtotal/total_amount above are always in the store's base currency.
     # currency_code/display_* reflect whichever currency was selected via
     # PUT /cart/currency — equal to the base figures when none was.

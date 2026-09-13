@@ -5,6 +5,7 @@ from sqlalchemy import (
     String,
     DateTime,
     Boolean,
+    Integer,
     func,
     Enum as SQLEnum,
 )
@@ -46,6 +47,10 @@ class User(Base):
     # at registration — most users never save a card, so most rows would
     # never need this.
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
+
+    # Fast-read running total — see app/models/loyalty_transaction.py for
+    # the ledger of earn/redeem/reversal entries that back this number.
+    loyalty_points_balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
     # Relationships
     addresses: Mapped[List["Address"]] = relationship(

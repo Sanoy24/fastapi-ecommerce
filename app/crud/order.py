@@ -14,6 +14,7 @@ from app.models.cart_item import CartItem
 from app.models.coupon_usage import CouponUsage
 from app.models.inventory_reservation import InventoryReservation
 from app.models.inventory_transaction import InventoryTransaction
+from app.models.loyalty_transaction import LoyaltyTransaction
 from app.models.shipment import Shipment
 from app.models.subscription import Subscription
 from app.core.exceptions import OrderException
@@ -21,7 +22,13 @@ from app.models.user import User
 from app.utils.order_utils import generate_order_number, generate_trx_ref
 from app.crud.address import AddressCrud
 from app.schema.order_schema import GuestAddressInput
-from app.services.pricing import LineItemLike, calculate_coupon_discount, calculate_promotion_discount, get_unit_price
+from app.services.pricing import (
+    LineItemLike,
+    calculate_coupon_discount,
+    calculate_points_discount,
+    calculate_promotion_discount,
+    get_unit_price,
+)
 
 
 class OrderCrud:
@@ -131,6 +138,14 @@ class OrderCrud:
         if cart.coupon_id:
             raise OrderException("Please sign in to check out with a coupon code.")
 
+        # Can't actually happen today — points can only be redeemed via the
+        # authenticated PUT /cart/points, so an anonymous cart's
+        # points_redeemed is always 0 — but this keeps the guard here
+        # explicit and paired with the coupon one above rather than relying
+        # on that being true forever.
+        if cart.points_redeemed:
+            raise OrderException("Please sign in to check out with redeemed loyalty points.")
+
         return self._build_and_persist_order(
             user_id=None,
             guest_email=guest_email,
@@ -165,7 +180,7 @@ class OrderCrud:
         _calculate_shipping_amount actually read.
         """
         raw_subtotal = float(sum(get_unit_price(i) * i.quantity for i in items))
-        discount = self._calculate_discount(items, raw_subtotal, cart, user_id)
+        discount, points_redeemed = self._calculate_discount(items, raw_subtotal, cart, user_id)
 
         region = shipping_address.state or shipping_address.country
         tax_amount = self._calculate_tax_amount(items, region)
@@ -190,6 +205,7 @@ class OrderCrud:
             total_amount=total_amount,
             currency_code=currency_code,
             exchange_rate_at_purchase=exchange_rate,
+            points_redeemed=points_redeemed,
             status="pending",
             tx_ref=generate_trx_ref(),
         )
@@ -220,6 +236,22 @@ class OrderCrud:
                 order_id=order.id
             )
             self.db.add(usage)
+
+        # Deduct redeemed points now (never true for a guest order — see
+        # the guard in create_guest_order); reversed on cancel
+        # (OrderService.cancel_order) or refund (PaymentService.refund_payment)
+        # using order.points_redeemed rather than re-deriving it.
+        if points_redeemed > 0:
+            user = self.db.get(User, user_id)
+            assert user is not None  # re-validated to exist and have enough balance in _calculate_discount
+            user.loyalty_points_balance -= points_redeemed
+            self.db.add(LoyaltyTransaction(
+                user_id=user_id,
+                order_id=order.id,
+                points=-points_redeemed,
+                transaction_type="redeem",
+                note=f"Redeemed at checkout for order {order.order_number}",
+            ))
 
         # Outbox Pattern: Insert event into outbox_events in the same transaction
         from app.models.outbox_event import OutboxEvent
@@ -403,8 +435,16 @@ class OrderCrud:
             "state": addr.state,
         }
 
-    def _calculate_discount(self, items: list[CartItem], raw_subtotal: float, cart, user_id: int | None) -> float:
-        """Coupon + promotion discount for a checkout, mirroring what the cart displayed."""
+    def _calculate_discount(
+        self, items: list[CartItem], raw_subtotal: float, cart, user_id: int | None
+    ) -> tuple[float, int]:
+        """Coupon + promotion + points discount for a checkout, mirroring
+        what the cart displayed. Returns (discount, points_redeemed) —
+        points_redeemed is what actually gets deducted from the user's
+        balance and snapshotted onto the order, since cart.points_redeemed
+        alone isn't enough: the balance is re-checked here in case it
+        changed since the cart last had it validated (see
+        CartService.redeem_points)."""
         discount = 0.0
 
         if cart.coupon and cart.coupon.is_valid:
@@ -423,7 +463,16 @@ class OrderCrud:
         # see CartService.get_cart_details, which uses the same helper.
         promo_discount, _applied_promotions = calculate_promotion_discount(self.db, list(items))
         discount += promo_discount
-        return discount
+
+        points_redeemed = 0
+        if cart.points_redeemed > 0:
+            user = self.db.get(User, user_id) if user_id is not None else None
+            if not user or user.loyalty_points_balance < cart.points_redeemed:
+                raise OrderException("You no longer have enough loyalty points for this redemption.")
+            discount += calculate_points_discount(raw_subtotal, cart.points_redeemed)
+            points_redeemed = cart.points_redeemed
+
+        return discount, points_redeemed
 
     def _calculate_tax_amount(self, items: Sequence[LineItemLike], region: str | None) -> float:
         from app.models.tax_rate import TaxRate
