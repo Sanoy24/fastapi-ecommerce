@@ -1,131 +1,228 @@
-# FastAPI E-Commerce RESTFul API
+# FastAPI E-Commerce API
 
-A robust and scalable RESTful API built with FastAPI for managing an e-commerce platform. This backend handles product catalogs, user authentication, shopping carts, order processing, and more.
+A production-oriented e-commerce backend built with FastAPI: full catalog and checkout, real Stripe payments and subscriptions, multi-currency pricing, loyalty points and gift cards, guest checkout, and a full observability stack (metrics, tracing, logs).
 
 ## Features
 
--   **User Management**: Secure user registration, login, and profile management using JWT authentication and Argon2 hashing.
--   **Product Catalog**: Manage products and categories with support for hierarchical structures.
--   **Shopping Cart**: Full-featured shopping cart functionality (add, remove, update items).
--   **Order Processing**: comprehensive order lifecycle management from creation to completion.
--   **Payments**: Integration ready for payment processing (Data models included).
--   **Reviews**: Product review and rating system.
--   **Address Management**: Manage user shipping and billing addresses.
--   **Database**: SQL-based persistence using SQLAlchemy ORM with Alembic for migrations.
--   **Monitoring**: Integrated Sentry for error tracking and performance monitoring.
--   **Documentation**: Interactive API documentation via Swagger UI and ReDoc.
+-   **Accounts & Auth**: JWT access/refresh tokens, Argon2 password hashing, email verification, password reset, TOTP-based MFA, and OAuth social login (Google, Facebook).
+-   **Catalog**: products with variants, images, and brands; hierarchical categories; tax rates and shipping zones/methods; product Q&A; back-in-stock and price-drop email alerts; CSV bulk product import/export.
+-   **Cart & Checkout**: persistent and guest carts, coupons, promotions, multi-currency display and checkout (base-currency accounting with live conversion), loyalty points, and gift cards / store credit — all stackable as checkout discounts.
+-   **Orders**: full lifecycle (pending → paid → shipped → delivered), guest checkout with order tracking and later account-claiming, returns and admin-approved refunds, PDF invoices.
+-   **Subscriptions**: recurring orders on a fixed interval, billed automatically off-session against a saved payment method, with pause/resume/skip and dunning on failed renewals.
+-   **Payments**: Stripe PaymentIntents and webhooks, saved payment methods, idempotency keys on payment-creating requests.
+-   **Admin**: sales/inventory analytics, audit log, order and return management, coupon/promotion/currency/gift-card administration.
+-   **Search**: Elasticsearch-backed product search.
+-   **Background jobs**: an ARQ worker handles subscription renewals, abandoned-cart recovery emails, back-in-stock/price-drop notifications, and inventory-reservation cleanup.
+-   **Reliability**: the outbox pattern for reliably publishing domain events, row-level locking on stock reservations, rate limiting, and security-header middleware.
+-   **Observability**: structured JSON request logging (Loguru), OpenTelemetry tracing, and Prometheus metrics — see [Docker Support](#docker-support) for the full stack.
+-   **Testing**: the suite runs against a real, ephemeral PostgreSQL container (via testcontainers) rather than SQLite, so it exercises the same database engine as production.
 
 ## Tech Stack
 
 -   **Framework**: [FastAPI](https://fastapi.tiangolo.com/)
 -   **Language**: Python 3.10+
--   **Database ORM**: [SQLAlchemy](https://www.sqlalchemy.org/)
--   **Migrations**: [Alembic](https://alembic.sqlalchemy.org/)
--   **Validation**: [Pydantic](https://docs.pydantic.dev/)
--   **Authentication**: PyJWT, Argon2-cffi
--   **Server**: Uvicorn
--   **Logging**: Loguru
+-   **Database**: PostgreSQL, via [SQLAlchemy](https://www.sqlalchemy.org/) 2.x and [Alembic](https://alembic.sqlalchemy.org/) migrations
+-   **Cache / Background jobs**: Redis, [ARQ](https://arq-docs.helpmanual.io/)
+-   **Search**: Elasticsearch
+-   **Payments**: [Stripe](https://stripe.com/)
+-   **Validation**: [Pydantic](https://docs.pydantic.dev/) v2
+-   **Auth**: PyJWT, Argon2 (pwdlib), PyOTP (MFA), OAuth (Google, Facebook)
+-   **Observability**: OpenTelemetry, Prometheus, Loguru
+-   **Testing**: pytest, testcontainers
+-   **Dependency management**: [Poetry](https://python-poetry.org/) (a `requirements.txt` is also kept in sync for Docker)
 
 ## Prerequisites
 
 -   Python 3.10 or higher
+-   Docker and Docker Compose (recommended — the app needs PostgreSQL, Redis, and Elasticsearch to fully start; Compose runs all of them together)
+-   A Stripe account (test-mode keys) if you want to exercise the payment/subscription flows
 -   Git
 
-## 🔧 Installation
+## 🚀 Quick Start (Docker Compose)
+
+This is the fastest way to get every dependency (PostgreSQL, Redis, Elasticsearch) running alongside the app.
 
 1.  **Clone the repository**
 
     ```bash
-    git clone https://github.com/yourusername/fastapi-ecommerce.git
+    git clone https://github.com/Sanoy24/fastapi-ecommerce.git
     cd fastapi-ecommerce
     ```
 
-2.  **Create a virtual environment**
+2.  **Create your `.env`**
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    At minimum, set `JWT_SECRET_KEY` to a random string of 32+ characters. See [Environment Configuration](#environment-configuration) for everything else.
+
+3.  **Start the stack**
+
+    ```bash
+    docker compose up --build
+    ```
+
+    This starts the API (`:8000`), the ARQ background worker, PostgreSQL, Redis, and Elasticsearch (plus Kibana/Prometheus/Grafana/Loki/Tempo — see [Docker Support](#docker-support)).
+
+4.  **Apply migrations**
+
+    ```bash
+    docker compose exec fastapi-app alembic upgrade head
+    ```
+
+5.  Visit **http://localhost:8000/docs**.
+
+## 🔧 Manual Setup
+
+Use this if you'd rather run the app directly and point it at your own PostgreSQL/Redis/Elasticsearch instances.
+
+1.  **Create a virtual environment**
 
     ```bash
     python -m venv venv
     source venv/bin/activate  # On Windows: venv\Scripts\activate
     ```
 
-3.  **Install dependencies**
+2.  **Install dependencies**
 
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Environment Configuration**
+3.  **Configure the environment** — see [Environment Configuration](#environment-configuration).
 
-    Create a `.env` file in the root directory. You can use the following template:
+4.  **Apply migrations**
 
-    ```env
-    DATABASE_URL=sqlite:///./ecommerce.db
-    SECRET_KEY=your_super_secret_key
-    ALGORITHM=HS256
-    ACCESS_TOKEN_EXPIRE_MINUTES=30
-    # Add other necessary variables
+    ```bash
+    alembic upgrade head
     ```
+
+5.  **Run it**
+
+    ```bash
+    uvicorn app.main:app --reload
+    ```
+
+### Using Poetry
+
+CI uses Poetry, so it's kept as the source of truth for dependencies:
+
+```bash
+poetry install --with dev
+poetry run alembic upgrade head
+poetry run uvicorn app.main:app --reload
+```
+
+## Environment Configuration
+
+Settings are defined in `app/core/config.py` (case-insensitive env var names) and loaded from a `.env` file. `JWT_SECRET_KEY` is the only variable with no default — everything else falls back to a sensible local-dev value.
+
+```env
+# Required
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/ecommerce
+JWT_SECRET_KEY=replace-with-a-random-secret-at-least-32-characters-long
+
+# Infra (defaults assume Docker Compose / localhost)
+REDIS_URL=redis://localhost:6379/0
+ELASTIC_URL=http://localhost:9200
+
+# Stripe (test-mode keys — required for payment/subscription flows)
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# OAuth social login (optional — leave blank to disable a provider)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+FACEBOOK_CLIENT_ID=
+FACEBOOK_CLIENT_SECRET=
+OAUTH_REDIRECT_URI=http://localhost:3000/auth/callback
+
+# Outbound email (optional — password reset / order emails)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+EMAILS_FROM_ADDRESS=
+
+# Storefront behavior
+BASE_CURRENCY_CODE=USD
+FRONTEND_URL=http://localhost:3000
+```
+
+`app/core/config.py` also covers JWT token lifetimes, CORS origins, loyalty-points earn/redemption rates, and S3-backed file storage — all optional with working defaults.
 
 ## Database Setup
 
-Initialize the database and apply migrations:
-
 ```bash
-# Apply existing migrations
 alembic upgrade head
 ```
 
-## Running the Application
+The migration chain bootstraps a full schema from empty — no separate seed step required. To create a new migration after changing a model:
 
-Start the development server using Uvicorn:
+```bash
+alembic revision --autogenerate -m "describe the change"
+```
+
+## Running the Application
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-The API will be available at `http://127.0.0.1:8000/api/v1`.
+The app also runs with `root_path=/api/v1` configured for deployment behind a reverse proxy — locally it answers on both `http://127.0.0.1:8000/...` and `http://127.0.0.1:8000/api/v1/...`.
 
-## Using Poetry
+## Running the Background Worker
 
-If you prefer using [Poetry](https://python-poetry.org/) for dependency management:
+Subscription renewals, abandoned-cart recovery, and back-in-stock/price-drop notification emails all run through an ARQ worker, not the API process:
 
-1.  **Install dependencies**
+```bash
+arq app.workers.arq_worker.WorkerSettings
+```
 
-    ```bash
-    poetry install
-    ```
+It needs the same `.env` (particularly `DATABASE_URL` and `REDIS_URL`) as the API.
 
-2.  **Environment Configuration**
+## Testing
 
-    Ensure you have created the `.env` file as described in the [Installation](#installation) section.
+```bash
+pytest
+```
 
-3.  **Run the application**
+The suite spins up its own disposable PostgreSQL container via testcontainers (Docker must be running) rather than mocking the database, so it needs no `DATABASE_URL` of its own. Lint and type-check the same way CI does:
 
-    ```bash
-    poetry run uvicorn app.main:app --reload
-    ```
-
-## Docker Support
-
-You can also run the application using Docker.
-
-1.  **Build the image**
-
-    ```bash
-    docker build -t fastapi-ecommerce .
-    ```
-
-2.  **Run the container**
-
-    ```bash
-    docker run -d -p 8000:8000 fastapi-ecommerce
-    ```
+```bash
+ruff check app/
+mypy app/
+```
 
 ## API Documentation
 
-Once the application is running, you can access the interactive documentation:
+Once running:
 
--   **Swagger UI**: [http://127.0.0.1:8000/api/v1/docs](http://127.0.0.1:8000/api/v1/docs)
--   **ReDoc**: [http://127.0.0.1:8000/api/v1/redoc](http://127.0.0.1:8000/api/v1/redoc)
+-   **Swagger UI**: http://127.0.0.1:8000/docs
+-   **ReDoc**: http://127.0.0.1:8000/redoc
+
+## Docker Support
+
+`docker-compose.yml` brings up the full stack:
+
+| Service | Purpose | Port |
+|---|---|---|
+| `fastapi-app` | the API | 8000 |
+| `worker` | ARQ background jobs | — |
+| `postgres` | primary database | 5432 |
+| `redis` | cache, rate limiting, ARQ queue | 6379 |
+| `elasticsearch` | product search | 9200 |
+| `kibana` | Elasticsearch UI | 5601 |
+| `prometheus` | metrics | 9090 |
+| `grafana` | dashboards (`admin`/`admin`) | 3000 |
+| `loki` | log aggregation | 3100 |
+| `tempo` | trace storage (OTLP on 4317/4318) | 3200 |
+
+```bash
+docker compose up --build        # everything
+docker compose up fastapi-app worker postgres redis elasticsearch  # just what the API needs
+```
 
 ## Project Structure
 
@@ -134,22 +231,23 @@ fastapi-ecommerce/
 ├── alembic/              # Database migrations
 ├── app/
 │   ├── api/              # API route handlers
-│   ├── core/             # Core configuration (config, security)
-│   ├── crud/             # CRUD operations
+│   ├── core/             # Core configuration (config, security, limiter)
+│   ├── crud/             # Database access layer
 │   ├── db/               # Database connection and session
-│   ├── middleware/       # Custom middlewares
+│   ├── middleware/       # Request logging, security headers
 │   ├── models/           # SQLAlchemy database models
 │   ├── schema/           # Pydantic schemas (request/response)
 │   ├── services/         # Business logic
+│   ├── workers/          # ARQ background jobs
 │   ├── utils/            # Utility functions
 │   └── main.py           # Application entry point
-├── tests/                # Test suite
-├── .env                  # Environment variables
-├── .gitignore
+├── tests/                # Test suite (real Postgres via testcontainers)
+├── .env.example          # Environment variable template
 ├── alembic.ini           # Alembic configuration
-├── docker-compose.yml    # Docker composition (if applicable)
+├── docker-compose.yml    # Full local stack (API, worker, Postgres, Redis, ES, observability)
 ├── Dockerfile
-├── requirements.txt      # Python dependencies
+├── pyproject.toml        # Poetry project (source of truth for dependencies)
+├── requirements.txt      # Exported for Docker/pip installs
 └── README.md
 ```
 
