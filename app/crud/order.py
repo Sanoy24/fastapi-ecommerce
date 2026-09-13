@@ -15,6 +15,7 @@ from app.models.coupon_usage import CouponUsage
 from app.models.inventory_reservation import InventoryReservation
 from app.models.inventory_transaction import InventoryTransaction
 from app.models.loyalty_transaction import LoyaltyTransaction
+from app.models.store_credit_transaction import StoreCreditTransaction
 from app.models.shipment import Shipment
 from app.models.subscription import Subscription
 from app.core.exceptions import OrderException
@@ -27,6 +28,7 @@ from app.services.pricing import (
     calculate_coupon_discount,
     calculate_points_discount,
     calculate_promotion_discount,
+    calculate_store_credit_discount,
     get_unit_price,
 )
 
@@ -146,6 +148,9 @@ class OrderCrud:
         if cart.points_redeemed:
             raise OrderException("Please sign in to check out with redeemed loyalty points.")
 
+        if cart.store_credit_applied:
+            raise OrderException("Please sign in to check out with applied store credit.")
+
         return self._build_and_persist_order(
             user_id=None,
             guest_email=guest_email,
@@ -180,7 +185,7 @@ class OrderCrud:
         _calculate_shipping_amount actually read.
         """
         raw_subtotal = float(sum(get_unit_price(i) * i.quantity for i in items))
-        discount, points_redeemed = self._calculate_discount(items, raw_subtotal, cart, user_id)
+        discount, points_redeemed, store_credit_applied = self._calculate_discount(items, raw_subtotal, cart, user_id)
 
         region = shipping_address.state or shipping_address.country
         tax_amount = self._calculate_tax_amount(items, region)
@@ -206,6 +211,7 @@ class OrderCrud:
             currency_code=currency_code,
             exchange_rate_at_purchase=exchange_rate,
             points_redeemed=points_redeemed,
+            store_credit_applied=store_credit_applied,
             status="pending",
             tx_ref=generate_trx_ref(),
         )
@@ -251,6 +257,22 @@ class OrderCrud:
                 points=-points_redeemed,
                 transaction_type="redeem",
                 note=f"Redeemed at checkout for order {order.order_number}",
+            ))
+
+        # Deduct applied store credit now (never true for a guest order —
+        # see the guard in create_guest_order); reversed on cancel
+        # (OrderService.cancel_order) or refund (PaymentService.refund_payment)
+        # using order.store_credit_applied rather than re-deriving it.
+        if store_credit_applied > 0:
+            user = self.db.get(User, user_id)
+            assert user is not None  # re-validated to exist and have enough balance in _calculate_discount
+            user.store_credit_balance = float(user.store_credit_balance) - store_credit_applied
+            self.db.add(StoreCreditTransaction(
+                user_id=user_id,
+                order_id=order.id,
+                amount=-store_credit_applied,
+                transaction_type="spend",
+                note=f"Applied at checkout for order {order.order_number}",
             ))
 
         # Outbox Pattern: Insert event into outbox_events in the same transaction
@@ -437,14 +459,15 @@ class OrderCrud:
 
     def _calculate_discount(
         self, items: list[CartItem], raw_subtotal: float, cart, user_id: int | None
-    ) -> tuple[float, int]:
-        """Coupon + promotion + points discount for a checkout, mirroring
-        what the cart displayed. Returns (discount, points_redeemed) —
-        points_redeemed is what actually gets deducted from the user's
-        balance and snapshotted onto the order, since cart.points_redeemed
-        alone isn't enough: the balance is re-checked here in case it
-        changed since the cart last had it validated (see
-        CartService.redeem_points)."""
+    ) -> tuple[float, int, float]:
+        """Coupon + promotion + points + store-credit discount for a
+        checkout, mirroring what the cart displayed. Returns
+        (discount, points_redeemed, store_credit_applied) — the latter two
+        are what actually gets deducted from the user's balances and
+        snapshotted onto the order, since cart.points_redeemed /
+        cart.store_credit_applied alone aren't enough: both balances are
+        re-checked here in case they changed since the cart last had them
+        validated (see CartService.redeem_points / apply_store_credit)."""
         discount = 0.0
 
         if cart.coupon and cart.coupon.is_valid:
@@ -472,7 +495,15 @@ class OrderCrud:
             discount += calculate_points_discount(raw_subtotal, cart.points_redeemed)
             points_redeemed = cart.points_redeemed
 
-        return discount, points_redeemed
+        store_credit_applied = 0.0
+        if cart.store_credit_applied > 0:
+            user = self.db.get(User, user_id) if user_id is not None else None
+            if not user or float(user.store_credit_balance) < float(cart.store_credit_applied):
+                raise OrderException("You no longer have enough store credit for this amount.")
+            discount += calculate_store_credit_discount(raw_subtotal, float(cart.store_credit_applied))
+            store_credit_applied = float(cart.store_credit_applied)
+
+        return discount, points_redeemed, store_credit_applied
 
     def _calculate_tax_amount(self, items: Sequence[LineItemLike], region: str | None) -> float:
         from app.models.tax_rate import TaxRate

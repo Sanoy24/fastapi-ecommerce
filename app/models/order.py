@@ -101,6 +101,14 @@ class Order(Base):
     # reverse exactly what this order did without recomputing it later.
     points_redeemed: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     points_earned: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Store credit (in the base currency) applied as a discount at
+    # checkout, deducted from User.store_credit_balance at order-creation
+    # time and restored on cancellation/refund (see
+    # OrderService.cancel_order / PaymentService.refund_payment) — the
+    # same snapshot-for-reversal role points_redeemed plays above.
+    store_credit_applied: Mapped[float] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0, server_default="0"
+    )
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship("User", back_populates="orders")

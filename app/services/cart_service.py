@@ -14,6 +14,7 @@ from app.services.pricing import (
     calculate_coupon_discount,
     calculate_points_discount,
     calculate_promotion_discount,
+    calculate_store_credit_discount,
     get_unit_price,
 )
 
@@ -102,8 +103,11 @@ class CartService:
         coupon_discount = calculate_coupon_discount(raw_subtotal, coupon)
         promo_discount, applied_promotions = calculate_promotion_discount(self.db, list(cart.cart_items))
         points_discount = calculate_points_discount(raw_subtotal, cart.points_redeemed)
+        store_credit_discount = calculate_store_credit_discount(raw_subtotal, float(cart.store_credit_applied))
 
-        subtotal = max(0.0, raw_subtotal - coupon_discount - promo_discount - points_discount)
+        subtotal = max(
+            0.0, raw_subtotal - coupon_discount - promo_discount - points_discount - store_credit_discount
+        )
 
         total_items = sum(item.quantity for item in cart.cart_items)
 
@@ -191,6 +195,9 @@ class CartService:
             "points_redeemed": cart.points_redeemed,
             "points_discount_amount": points_discount,
             "loyalty_points_balance": cart.user.loyalty_points_balance if cart.user_id else 0,
+            "store_credit_applied": float(cart.store_credit_applied),
+            "store_credit_discount_amount": store_credit_discount,
+            "store_credit_balance": float(cart.user.store_credit_balance) if cart.user_id else 0.0,
             "currency_code": currency_code,
             "exchange_rate_to_base": exchange_rate,
             "display_subtotal": convert_from_base(raw_subtotal, exchange_rate, currency_code),
@@ -243,6 +250,28 @@ class CartService:
 
     def remove_points(self, cart: Cart) -> Cart:
         cart.points_redeemed = 0
+        self.db.commit()
+        self.db.refresh(cart)
+        return cart
+
+    def apply_store_credit(self, cart: Cart, available_balance: float, amount: float) -> Cart:
+        """Set how much store credit to apply toward this cart's total.
+        Re-validated against the live balance again at checkout, the same
+        as redeem_points above."""
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be positive")
+        if amount > available_balance:
+            raise HTTPException(
+                status_code=400, detail=f"Insufficient store credit balance: you have {available_balance:.2f}"
+            )
+
+        cart.store_credit_applied = amount
+        self.db.commit()
+        self.db.refresh(cart)
+        return cart
+
+    def remove_store_credit(self, cart: Cart) -> Cart:
+        cart.store_credit_applied = 0
         self.db.commit()
         self.db.refresh(cart)
         return cart

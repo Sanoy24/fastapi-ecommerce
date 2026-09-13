@@ -8,6 +8,7 @@ from app.services.cart_service import CartService
 from app.schema.cart_schema import CartItemCreate, CartItemUpdate
 from app.schema.currency_schema import SetCartCurrencyRequest
 from app.schema.loyalty_schema import RedeemPointsRequest
+from app.schema.gift_card_schema import ApplyStoreCreditRequest
 from app.utils.session import generate_session_id
 from app.core.logger import logger
 
@@ -177,6 +178,34 @@ async def remove_points(
     cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
     cart_service.remove_points(cart)
     return {"message": "Points redemption removed"}
+
+
+@router.put("/store-credit", summary="Apply store credit toward this cart's total")
+async def apply_store_credit(
+    data: ApplyStoreCreditRequest,
+    current_user: user_dep,
+    cart_service: cart_dependency,
+):
+    # Same as points: no anonymous store-credit balance to apply against.
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Sign in to apply store credit")
+
+    cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
+    cart_service.apply_store_credit(cart, current_user.store_credit_balance, data.amount)
+    return {"message": f"{data.amount:.2f} store credit applied"}
+
+
+@router.delete("/store-credit", summary="Remove applied store credit from this cart")
+async def remove_store_credit(
+    current_user: user_dep,
+    cart_service: cart_dependency,
+):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Sign in to manage store credit")
+
+    cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
+    cart_service.remove_store_credit(cart)
+    return {"message": "Store credit removed"}
 
 
 @router.put("/currency", summary="Set the currency to check out in")

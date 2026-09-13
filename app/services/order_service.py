@@ -203,20 +203,31 @@ class OrderService:
         # Only pending orders reach this point (checked above), and payment
         # never succeeds before "paid" — so points_earned is always still 0
         # here; only a redemption needs restoring, never a clawback.
-        if order.points_redeemed > 0:
+        if order.points_redeemed > 0 or order.store_credit_applied > 0:
             from app.models.loyalty_transaction import LoyaltyTransaction
+            from app.models.store_credit_transaction import StoreCreditTransaction
             from app.models.user import User
 
             user = self.db.get(User, user_id)
             if user:
-                user.loyalty_points_balance += order.points_redeemed
-                self.db.add(LoyaltyTransaction(
-                    user_id=user_id,
-                    order_id=order.id,
-                    points=order.points_redeemed,
-                    transaction_type="reversal",
-                    note=f"Points redeemed on order {order.order_number} restored after cancellation",
-                ))
+                if order.points_redeemed > 0:
+                    user.loyalty_points_balance += order.points_redeemed
+                    self.db.add(LoyaltyTransaction(
+                        user_id=user_id,
+                        order_id=order.id,
+                        points=order.points_redeemed,
+                        transaction_type="reversal",
+                        note=f"Points redeemed on order {order.order_number} restored after cancellation",
+                    ))
+                if order.store_credit_applied > 0:
+                    user.store_credit_balance = float(user.store_credit_balance) + float(order.store_credit_applied)
+                    self.db.add(StoreCreditTransaction(
+                        user_id=user_id,
+                        order_id=order.id,
+                        amount=order.store_credit_applied,
+                        transaction_type="reversal",
+                        note=f"Store credit applied on order {order.order_number} restored after cancellation",
+                    ))
 
         order.status = "cancelled"
         order.payment_status = "failed"

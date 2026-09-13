@@ -14,6 +14,7 @@ from app.models.payment_event import PaymentEvent
 from app.models.inventory_reservation import InventoryReservation
 from app.models.inventory_transaction import InventoryTransaction
 from app.models.loyalty_transaction import LoyaltyTransaction
+from app.models.store_credit_transaction import StoreCreditTransaction
 from app.models.user import User
 from app.utils.currency import convert_from_base, to_stripe_amount
 
@@ -365,6 +366,20 @@ class PaymentService:
                         points=order.points_redeemed,
                         transaction_type="reversal",
                         note=f"Points redeemed on order {order.order_number} restored after refund",
+                    ))
+                if order.store_credit_applied > 0:
+                    # No clawback side here — store credit is never
+                    # "earned" from a purchase the way points are, only
+                    # ever credited by redeeming a gift card, so restoring
+                    # what this order applied can't drive the balance
+                    # negative the way the points_earned clawback above can.
+                    user.store_credit_balance = float(user.store_credit_balance) + float(order.store_credit_applied)
+                    self.db.add(StoreCreditTransaction(
+                        user_id=order.user_id,
+                        order_id=order.id,
+                        amount=order.store_credit_applied,
+                        transaction_type="reversal",
+                        note=f"Store credit applied on order {order.order_number} restored after refund",
                     ))
 
         self.db.commit()
