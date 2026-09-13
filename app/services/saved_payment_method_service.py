@@ -109,6 +109,19 @@ class SavedPaymentMethodService:
         if not method or method.user_id != user_id:
             raise HTTPException(status_code=404, detail="Payment method not found")
 
+        # Subscription.saved_payment_method_id is a RESTRICT FK, and stays
+        # RESTRICT even for a cancelled subscription (see
+        # SubscriptionCrud.count_for_payment_method) — without this check,
+        # deleting a card any subscription ever used would surface as a
+        # raw IntegrityError instead of a clear 409.
+        from app.crud.subscription import SubscriptionCrud
+
+        if SubscriptionCrud(self.db).count_for_payment_method(method_id) > 0:
+            raise HTTPException(
+                status_code=409,
+                detail="This payment method has been used by a subscription and cannot be deleted",
+            )
+
         try:
             stripe.PaymentMethod.detach(method.stripe_payment_method_id)
         except stripe.error.StripeError:
