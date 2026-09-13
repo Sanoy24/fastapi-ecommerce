@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
 from typing import Annotated, Optional
 from datetime import datetime
 
@@ -19,6 +19,7 @@ from app.schema.admin_schema import (
     InventoryAlert,
     BulkInventoryUpdateRequest,
     BulkInventoryUpdateResponse,
+    ProductImportResponse,
     SalesOverTime,
     TopSellingProduct,
 )
@@ -620,3 +621,39 @@ async def bulk_update_inventory(
 ):
     """Bulk update product inventory"""
     return admin_service.bulk_update_inventory(updates=update_request.updates, admin_id=current_admin.id)
+
+
+@router.get(
+    "/products/export",
+    summary="Export the product catalog as CSV",
+    description="Every product regardless of status, in the same column set /products/import reads back.",
+)
+async def export_products(
+    admin_service: Annotated[AdminService, Depends(get_admin_service)],
+    current_admin: Annotated[UserPublic, Depends(require_admin)],
+):
+    csv_content = admin_service.export_products_csv()
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="products.csv"'},
+    )
+
+
+@router.post(
+    "/products/import",
+    response_model=ProductImportResponse,
+    summary="Bulk create/update products from a CSV file",
+    description=(
+        "A row with an id column updates that product; a row without one creates a new one "
+        "(name and price required). One bad row is reported in failed_rows rather than "
+        "aborting the rest of the import."
+    ),
+)
+async def import_products(
+    admin_service: Annotated[AdminService, Depends(get_admin_service)],
+    current_admin: Annotated[UserPublic, Depends(require_admin)],
+    file: UploadFile = File(..., description="CSV file — see GET /admin/products/export for the column set"),
+):
+    content = (await file.read()).decode("utf-8-sig")
+    return admin_service.import_products_csv(content, admin_id=current_admin.id)

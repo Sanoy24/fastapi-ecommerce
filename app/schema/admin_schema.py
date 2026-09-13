@@ -214,3 +214,18 @@ class BulkInventoryUpdateResponse(BaseModel):
     failed_products: List[int] = Field(
         default_factory=list, description="Product IDs that failed to update"
     )
+
+
+class ProductImportRowError(BaseModel):
+    """One row of a product CSV import that couldn't be applied."""
+
+    row_number: int = Field(..., description="1-indexed row as it would appear in a spreadsheet (header is row 1)")
+    error: str
+
+
+class ProductImportResponse(BaseModel):
+    """Response for a bulk product CSV import."""
+
+    created_count: int
+    updated_count: int
+    failed_rows: List[ProductImportRowError] = Field(default_factory=list)

@@ -69,6 +69,12 @@ class ProductCrud:
         result = self.db.scalar(stmt)
         return result
 
+    def get_products_for_export(self) -> Sequence[Product]:
+        """Every product regardless of status — unlike get_all_products,
+        this backs a CSV export an admin can re-import, so a draft/archived
+        product shouldn't silently disappear from the round trip."""
+        return self.db.scalars(select(Product).order_by(Product.id)).all()
+
     def get_all_products(
         self,
         page: int = 1,

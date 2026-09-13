@@ -25,6 +25,8 @@ from app.schema.admin_schema import (
     InventoryAlert,
     BulkInventoryUpdateItem,
     BulkInventoryUpdateResponse,
+    ProductImportRowError,
+    ProductImportResponse,
 )
 
 
@@ -358,4 +360,91 @@ class AdminService:
 
         return BulkInventoryUpdateResponse(
             updated_count=updated_count, failed_products=failed_products
+        )
+
+    def export_products_csv(self) -> str:
+        """Every product as CSV — see app/utils/product_csv.py for the
+        column set, which import_products_csv reads back."""
+        from app.utils.product_csv import products_to_csv
+
+        products = self.product_crud.get_products_for_export()
+        return products_to_csv(products)
+
+    def import_products_csv(self, content: str, admin_id: int) -> ProductImportResponse:
+        """Bulk create/update products from CSV text.
+
+        A row with an "id" column updates that product (ProductUpdate,
+        partial); a row without one creates a new product (ProductCreate,
+        so name/price are required). Delegates to the same
+        create_product/update_product used by the single-product API
+        routes, so slug/sku generation, price-history recording, and
+        price-drop notifications all apply here for free — this is a bulk
+        entry point into the same logic, not a parallel path.
+
+        Reuses ProductCrud directly (like bulk_update_inventory above)
+        rather than going through ProductService, consistent with how
+        AdminService already talks to product_crud elsewhere.
+
+        One bad row never aborts the rest of the import: parse errors and
+        create/update failures are both collected into failed_rows instead
+        of raising.
+        """
+        from pydantic import ValidationError
+
+        from app.core.exceptions import ProductException
+        from app.schema.product_schema import ProductCreate, ProductUpdate
+        from app.utils.product_csv import parse_product_csv
+
+        created_count = 0
+        updated_count = 0
+        failed_rows: List[ProductImportRowError] = []
+
+        for row in parse_product_csv(content):
+            row_number = row.pop("_row_number")
+            parse_error = row.pop("_error", None)
+            if parse_error:
+                failed_rows.append(ProductImportRowError(row_number=row_number, error=parse_error))
+                continue
+
+            product_id = row.pop("id", None)
+            try:
+                if product_id is not None:
+                    if not self.product_crud.get_product_by_id(product_id):
+                        failed_rows.append(
+                            ProductImportRowError(
+                                row_number=row_number, error=f"Product {product_id} not found"
+                            )
+                        )
+                        continue
+                    self.product_crud.update_product(product_id, ProductUpdate(**row), admin_id=admin_id)
+                    updated_count += 1
+                else:
+                    if "name" not in row or "price" not in row:
+                        failed_rows.append(
+                            ProductImportRowError(
+                                row_number=row_number,
+                                error="name and price are required to create a product",
+                            )
+                        )
+                        continue
+                    self.product_crud.create_product(ProductCreate(**row))
+                    created_count += 1
+            except (ProductException, ValidationError) as e:
+                failed_rows.append(ProductImportRowError(row_number=row_number, error=str(e)))
+
+        if created_count or updated_count:
+            self.log_action(
+                admin_id,
+                "PRODUCT_CSV_IMPORT",
+                "product",
+                0,
+                new_value={
+                    "created_count": created_count,
+                    "updated_count": updated_count,
+                    "failed_count": len(failed_rows),
+                },
+            )
+
+        return ProductImportResponse(
+            created_count=created_count, updated_count=updated_count, failed_rows=failed_rows
         )
