@@ -2,21 +2,6 @@ from pydantic import BaseModel, Field, field_validator, ValidationInfo, HttpUrl
 from app.core.logger import logger
 import re
 
-# class Category(Base):
-#     __tablename__ = "categories"
-
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     name = Column(String(20), unique=True)
-#     slug = Column(String(20), unique=True)
-#     parent_id = Column(Integer, ForeignKey("categories.id"))
-#     description = Column(Text)
-#     image_url = Column(String(30))
-
-#     # Relationships (self-referential)
-#     parent = relationship("Category", remote_side=[id], back_populates="children")
-#     children = relationship("Category", back_populates="parent")
-#     products = relationship("Product", back_populates="category")
-
 
 class CreateCategory(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -70,7 +55,7 @@ class CategoryPublic(BaseModel):
 
 
 class UpdateCategory(BaseModel):
-    name: str | None = None
+    name: str | None = Field(None, min_length=1, max_length=100)
     slug: str | None = None
     parent_id: int | None = None
     description: str | None = None

@@ -81,6 +81,7 @@ class ProductCrud:
         per_page: int = 10,
         search: str | None = None,
         category_id: int | None = None,
+        brand_id: int | None = None,
         min_price: float | None = None,
         max_price: float | None = None,
         min_rating: float | None = None,
@@ -96,6 +97,7 @@ class ProductCrud:
             per_page: Items per page (1-100)
             search: Search term for name and description
             category_id: Filter by category
+            brand_id: Filter by brand
             min_price: Minimum price filter
             max_price: Maximum price filter
             min_rating: Minimum average rating (0-5)
@@ -125,6 +127,10 @@ class ProductCrud:
         # Category filter
         if category_id:
             stmt = stmt.where(Product.category_id == category_id)
+
+        # Brand filter
+        if brand_id:
+            stmt = stmt.where(Product.brand_id == brand_id)
 
         # Price range filters
         if min_price is not None:
@@ -202,6 +208,8 @@ class ProductCrud:
             query_params.append(f"search={search}")
         if category_id:
             query_params.append(f"category_id={category_id}")
+        if brand_id:
+            query_params.append(f"brand_id={brand_id}")
         if min_price is not None:
             query_params.append(f"min_price={min_price}")
         if max_price is not None:

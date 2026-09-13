@@ -82,3 +82,33 @@ class TestCategories:
             json={"name": "Furniture"},
         )
         assert resp.status_code == 401
+
+
+class TestCategoryNameLength:
+    def test_a_realistic_long_category_name_is_accepted(
+        self, client: TestClient, db_session: Session
+    ):
+        """Regression target: name/slug/image_url used to be String(20)/
+        String(20)/String(30) — sized for a narrow single-department
+        catalog, not a general-merchandise store. A name like this one
+        (25 characters, well within the schema's own advertised
+        max_length=100) used to pass Pydantic validation and then fail at
+        the database with a truncation error."""
+        _make_admin(db_session)
+        token = _login(client, "admin_cat@test.com", "AdminCat1")
+        long_name = "Home & Kitchen Appliances"
+        assert len(long_name) == 25
+
+        resp = client.post(
+            "/category",
+            json={
+                "name": long_name,
+                "description": "Appliances for the home",
+                "image_url": "https://example.com/" + ("x" * 60) + ".jpg",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code in (200, 201), resp.json()
+        data = resp.json()
+        assert data["name"] == long_name
+        assert data["slug"].startswith("home-kitchen-appliances")

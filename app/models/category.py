@@ -10,13 +10,13 @@ class Category(Base):
     __tablename__ = "categories"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    slug: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    slug: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     parent_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("categories.id")
     )
     description: Mapped[Optional[str]] = mapped_column(Text)
-    image_url: Mapped[Optional[str]] = mapped_column(String(30))
+    image_url: Mapped[Optional[str]] = mapped_column(String(500))
 
     # Relationships (self-referential)
     parent: Mapped[Optional["Category"]] = relationship(

@@ -19,6 +19,9 @@ class ProductBase(BaseModel):
     meta_title: Optional[str] = Field(None, max_length=70)
     meta_description: Optional[str] = Field(None, max_length=160)
     canonical_url: Optional[str] = Field(None, max_length=255)
+    attributes: Optional[dict] = Field(
+        None, description="Category-specific spec data, e.g. {\"ram_gb\": 16, \"color\": \"Silver\"}"
+    )
 
 
 class ProductCreate(ProductBase):
@@ -58,6 +61,7 @@ class ProductUpdate(BaseModel):
     meta_title: Optional[str] = Field(None, max_length=70)
     meta_description: Optional[str] = Field(None, max_length=160)
     canonical_url: Optional[str] = Field(None, max_length=255)
+    attributes: Optional[dict] = None
 
 
 class ProductResponse(ProductBase):
