@@ -22,7 +22,15 @@ class Payment(Base):
         ),
         nullable=False,
     )
+    # Unlike Order.total_amount (always base currency), amount here is in
+    # whatever currency_code says — the currency actually sent to Stripe
+    # for this charge (see
+    # PaymentService._create_payment_intent_for_order). refund_amount
+    # below is in the same currency for the same reason.
     amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    currency_code: Mapped[str] = mapped_column(
+        ForeignKey("currencies.code", ondelete="RESTRICT"), nullable=False
+    )
     status: Mapped[str] = mapped_column(
         SQLEnum("pending", "completed", "failed", name="payment_transaction_status"),
         default="pending",

@@ -154,6 +154,24 @@ class CartService:
         estimated_tax = round(estimated_tax, 2)
         total_amount = round(subtotal + estimated_tax, 2)
 
+        # subtotal/estimated_tax/total_amount above are always in
+        # settings.BASE_CURRENCY_CODE (every Product price is) —
+        # display_* below is the same figures converted into whatever
+        # currency the customer picked via PUT /cart/currency, so the
+        # frontend can show one number consistently regardless of whether
+        # a non-base currency was ever selected.
+        from app.core.config import settings
+        from app.crud.currency import CurrencyCrud
+        from app.utils.currency import convert_from_base
+
+        currency_code = settings.BASE_CURRENCY_CODE
+        exchange_rate = 1.0
+        if cart.currency_code:
+            currency = CurrencyCrud(self.db).get_active(cart.currency_code)
+            if currency:
+                currency_code = currency.code
+                exchange_rate = float(currency.exchange_rate_to_base)
+
         return {
             "id": cart.id,
             "items": items,
@@ -164,6 +182,10 @@ class CartService:
             "estimated_tax": estimated_tax,
             "total_amount": total_amount,
             "applied_promotions": applied_promotions,
+            "currency_code": currency_code,
+            "exchange_rate_to_base": exchange_rate,
+            "display_subtotal": convert_from_base(raw_subtotal, exchange_rate, currency_code),
+            "display_total_amount": convert_from_base(total_amount, exchange_rate, currency_code),
         }
 
     def apply_coupon(self, cart: Cart, code: str) -> Cart:
@@ -185,6 +207,25 @@ class CartService:
 
     def remove_coupon(self, cart: Cart) -> Cart:
         cart.coupon_id = None
+        self.db.commit()
+        self.db.refresh(cart)
+        return cart
+
+    def set_currency(self, cart: Cart, currency_code: str) -> Cart:
+        from app.crud.currency import CurrencyCrud
+
+        currency = CurrencyCrud(self.db).get_active(currency_code)
+        if not currency:
+            raise HTTPException(status_code=404, detail=f"Currency '{currency_code.upper()}' not found or inactive")
+
+        cart.currency_code = currency.code
+        self.db.commit()
+        self.db.refresh(cart)
+        return cart
+
+    def clear_currency(self, cart: Cart) -> Cart:
+        """Back to the base currency."""
+        cart.currency_code = None
         self.db.commit()
         self.db.refresh(cart)
         return cart

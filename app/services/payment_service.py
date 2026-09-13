@@ -13,6 +13,7 @@ from app.models.payment import Payment
 from app.models.payment_event import PaymentEvent
 from app.models.inventory_reservation import InventoryReservation
 from app.models.inventory_transaction import InventoryTransaction
+from app.utils.currency import convert_from_base, to_stripe_amount
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 stripe.max_network_retries = 3
@@ -68,7 +69,17 @@ class PaymentService:
         if order.payment_status == "success":
             raise HTTPException(status_code=400, detail="Order already paid")
 
-        amount = int(order.total_amount * 100)  # Amount in cents
+        # order.total_amount is always in the base currency (see
+        # Order.currency_code) — convert to what this order was actually
+        # placed in (and quoted to the customer) before charging Stripe,
+        # which needs both a real amount in that currency and its own
+        # smallest-unit encoding (to_stripe_amount handles zero-decimal
+        # currencies like JPY, where amount isn't multiplied by 100).
+        charge_currency = order.currency_code
+        charge_amount = convert_from_base(
+            float(order.total_amount), float(order.exchange_rate_at_purchase), charge_currency
+        )
+        amount = to_stripe_amount(charge_amount, charge_currency)
         metadata = {
             "order_id": str(order.id),
             "user_id": str(order.user_id) if order.user_id is not None else "guest",
@@ -89,7 +100,7 @@ class PaymentService:
                 assert stripe_customer_id is not None
                 intent = stripe.PaymentIntent.create(
                     amount=amount,
-                    currency="usd",
+                    currency=charge_currency.lower(),
                     metadata=metadata,
                     customer=stripe_customer_id,
                     payment_method=stripe_payment_method_id,
@@ -97,7 +108,7 @@ class PaymentService:
             else:
                 intent = stripe.PaymentIntent.create(
                     amount=amount,
-                    currency="usd",
+                    currency=charge_currency.lower(),
                     metadata=metadata,
                     automatic_payment_methods={"enabled": True},
                 )
@@ -107,7 +118,8 @@ class PaymentService:
         # Create local Payment record
         self.payment_crud.create_payment(
             order_id=order.id,
-            amount=order.total_amount,
+            amount=charge_amount,
+            currency_code=charge_currency,
             transaction_id=intent.id,
             payment_method="stripe",
         )
@@ -115,8 +127,8 @@ class PaymentService:
         return {
             "client_secret": intent.client_secret,
             "payment_intent_id": intent.id,
-            "amount": order.total_amount,
-            "currency": "usd",
+            "amount": charge_amount,
+            "currency": charge_currency.lower(),
         }
 
     def handle_webhook(self, payload, sig_header):
@@ -270,8 +282,14 @@ class PaymentService:
         if amount <= 0:
             raise HTTPException(status_code=400, detail="Refund amount must be positive")
 
+        # amount (and refund_amount/payment.amount it's compared against)
+        # is in payment.currency_code — the currency actually charged —
+        # not order.total_amount's base currency. Stripe infers the refund
+        # currency from the original PaymentIntent automatically, but the
+        # amount encoding still needs to match that currency's own rules
+        # (see to_stripe_amount).
         already_refunded = float(payment.refund_amount or 0)
-        remaining = float(order.total_amount) - already_refunded
+        remaining = float(payment.amount) - already_refunded
         if amount > remaining:
             raise HTTPException(
                 status_code=400,
@@ -281,7 +299,7 @@ class PaymentService:
         try:
             refund = stripe.Refund.create(
                 payment_intent=payment.transaction_id,
-                amount=int(amount * 100),
+                amount=to_stripe_amount(amount, payment.currency_code),
                 reason="requested_by_customer" if reason == "duplicate" else "requested_by_customer"  # stripe reasons are restricted
             )
         except stripe.error.StripeError as e:

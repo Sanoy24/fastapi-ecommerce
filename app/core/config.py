@@ -41,6 +41,10 @@ class Setting(BaseSettings):
     FACEBOOK_CLIENT_SECRET: str = ""
     OAUTH_REDIRECT_URI: str = "http://localhost:3000/auth/callback"
 
+    # Every product price is stored in this currency — see
+    # app/models/currency.py for how other currencies convert from it.
+    BASE_CURRENCY_CODE: str = "USD"
+
     # File storage: "local" or "s3"
     STORAGE_BACKEND: str = "local"
     UPLOAD_DIR: str = "uploads"

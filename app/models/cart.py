@@ -17,6 +17,12 @@ class Cart(Base):
     coupon_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True
     )
+    # None means "checkout in the base currency" — see
+    # CartService.set_currency and app/utils/currency.py. Not required at
+    # cart-creation time since most customers never touch it.
+    currency_code: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("currencies.code", ondelete="SET NULL"), nullable=True
+    )
     session_id: Mapped[str] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.current_timestamp()

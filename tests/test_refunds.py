@@ -102,6 +102,7 @@ def _create_paid_order(client: TestClient, db_session: Session):
         order_id=order.id,
         payment_method="stripe",
         amount=order.total_amount,
+        currency_code=order.currency_code,
         status="completed",
         transaction_id="pi_refund_test",
     )

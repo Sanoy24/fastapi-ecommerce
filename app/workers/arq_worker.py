@@ -418,6 +418,7 @@ async def process_due_subscriptions_task(ctx):
     from app.crud.payment import PaymentCrud
     from app.crud.subscription import SubscriptionCrud
     from app.models.user import User
+    from app.utils.currency import to_stripe_amount
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -453,8 +454,8 @@ async def process_due_subscriptions_task(ctx):
                 method = subscription.saved_payment_method
                 try:
                     intent = stripe.PaymentIntent.create(
-                        amount=int(order.total_amount * 100),
-                        currency="usd",
+                        amount=to_stripe_amount(float(order.total_amount), order.currency_code),
+                        currency=order.currency_code.lower(),
                         customer=user.stripe_customer_id,
                         payment_method=method.stripe_payment_method_id,
                         off_session=True,
@@ -474,6 +475,7 @@ async def process_due_subscriptions_task(ctx):
                 payment_crud.create_payment(
                     order_id=order.id,
                     amount=order.total_amount,
+                    currency_code=order.currency_code,
                     transaction_id=intent.id,
                     payment_method="stripe",
                 )
