@@ -13,7 +13,7 @@ from app.schema.order_schema import (
 )
 from app.schema.return_schema import ReturnCreateRequest, ReturnResponse
 from app.utils.idempotency import check_idempotency, cache_idempotent_response
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from arq.connections import ArqRedis
 from typing import Annotated
 from app.core.limiter import limiter
@@ -206,6 +206,23 @@ def get_single_order(
     current_user: user_dependency, order_service: order_dependency, order_id: int
 ):
     return order_service.get_one_order(current_user.id, order_id)
+
+
+@router.get("/{order_id}/invoice", summary="Download a PDF invoice for this order")
+def get_order_invoice(
+    current_user: user_dependency, order_service: order_dependency, order_id: int
+):
+    """Same ownership check as GET /{order_id} — get_one_order 404s if the
+    order doesn't belong to the caller."""
+    from app.services.invoice_service import generate_invoice_pdf
+
+    order = order_service.get_one_order(current_user.id, order_id)
+    pdf_bytes = generate_invoice_pdf(order)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="invoice-{order.order_number}.pdf"'},
+    )
 
 
 @router.post(
