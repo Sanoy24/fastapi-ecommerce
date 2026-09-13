@@ -63,6 +63,12 @@ class OrderResponse(BaseModel):
     subtotal: float
     tax_amount: float
     shipping_amount: float
+    # subtotal/tax_amount/shipping_amount/total_amount above are always in
+    # the store's base currency — currency_code/exchange_rate_at_purchase
+    # record what this specific order was actually charged in (see
+    # PaymentService._create_payment_intent_for_order).
+    currency_code: str
+    exchange_rate_at_purchase: float = 1.0
     notes: Optional[str] = None
     cancelled_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None

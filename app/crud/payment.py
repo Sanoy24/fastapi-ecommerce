@@ -13,11 +13,13 @@ class PaymentCrud:
         order_id: int,
         amount: float,
         transaction_id: str,
+        currency_code: str,
         payment_method: str = "stripe",
     ):
         payment = Payment(
             order_id=order_id,
             amount=amount,
+            currency_code=currency_code,
             transaction_id=transaction_id,
             payment_method=payment_method,
             status="pending",

@@ -422,10 +422,12 @@ def resolve_return(
     remember to restock and issue the refund as two separate manual steps.
     """
     from app.models.return_request import ReturnRequest
+    from app.models.order import Order
     from app.models.order_item import OrderItem
     from app.models.inventory_transaction import InventoryTransaction
     from app.crud.order import OrderCrud
     from app.services.payment_service import PaymentService
+    from app.utils.currency import convert_from_base
     from sqlalchemy import func, select
 
     return_req = db.get(ReturnRequest, return_id)
@@ -522,10 +524,22 @@ def resolve_return(
     refund_error = None
     if request.status == "approved" and refund_amount > 0:
         try:
+            # refund_amount above is summed from OrderItem.unit_price,
+            # which — like every other Order monetary column — is always
+            # in the base currency (see Order.currency_code). refund_payment's
+            # amount must be in whatever currency the order was actually
+            # charged in, so convert before calling it.
+            order_for_refund = db.get(Order, return_req.order_id)
+            assert order_for_refund is not None  # a ReturnRequest always references a real order
+            charge_currency_refund_amount = convert_from_base(
+                refund_amount,
+                float(order_for_refund.exchange_rate_at_purchase),
+                order_for_refund.currency_code,
+            )
             PaymentService(db).refund_payment(
                 order_id=return_req.order_id,
                 admin_id=admin.id,
-                amount=refund_amount,
+                amount=charge_currency_refund_amount,
                 reason="return_approved",
             )
         except HTTPException as e:

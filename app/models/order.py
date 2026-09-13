@@ -47,7 +47,21 @@ class Order(Base):
         ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True
     )
     order_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    # total_amount and every other monetary column on this model stay in
+    # settings.BASE_CURRENCY_CODE always, regardless of what currency_code
+    # says below — that's what keeps SUM(total_amount) in admin analytics
+    # meaningful across every order ever placed. currency_code +
+    # exchange_rate_at_purchase record what the customer actually saw and
+    # was charged (see PaymentService._create_payment_intent_for_order,
+    # which converts total_amount * exchange_rate_at_purchase into the
+    # real Stripe charge); exchange_rate_at_purchase is snapshotted here
+    # rather than read live from Currency so a later rate change never
+    # rewrites what a past order was actually billed.
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    currency_code: Mapped[str] = mapped_column(
+        ForeignKey("currencies.code", ondelete="RESTRICT"), nullable=False
+    )
+    exchange_rate_at_purchase: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False, default=1)
     status: Mapped[str] = mapped_column(
         SQLEnum(
             "pending", "paid", "processing", "packed", "shipped", "delivered", "cancelled",

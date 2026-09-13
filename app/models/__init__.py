@@ -35,6 +35,7 @@ from .product_answer import ProductAnswer
 from .saved_payment_method import SavedPaymentMethod
 from .oauth_account import OAuthAccount
 from .subscription import Subscription
+from .currency import Currency
 
 __all__ = [
     "User",
@@ -76,4 +77,5 @@ __all__ = [
     "SavedPaymentMethod",
     "OAuthAccount",
     "Subscription",
+    "Currency",
 ]

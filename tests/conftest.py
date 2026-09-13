@@ -63,6 +63,17 @@ def db_session(_engine):
     with _engine.begin() as conn:
         table_names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
         conn.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
+        # The real migration seeds this row (see
+        # alembic/versions/359fcf445d5a_add_multi_currency_support.py) —
+        # this suite creates tables straight from the models instead of
+        # running migrations, so nothing else would insert it, and
+        # Order/Payment.currency_code is a NOT NULL FK to it.
+        conn.execute(
+            text(
+                "INSERT INTO currencies (code, name, symbol, exchange_rate_to_base, is_active, created_at, updated_at) "
+                "VALUES ('USD', 'US Dollar', '$', 1, true, now(), now())"
+            )
+        )
 
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
     session = TestingSessionLocal()

@@ -6,6 +6,7 @@ from app.dependencies import get_cart_service_dep, get_optional_user
 from app.schema.user_schema import UserPublic
 from app.services.cart_service import CartService
 from app.schema.cart_schema import CartItemCreate, CartItemUpdate
+from app.schema.currency_schema import SetCartCurrencyRequest
 from app.utils.session import generate_session_id
 from app.core.logger import logger
 
@@ -146,4 +147,40 @@ async def remove_coupon(
 
     cart_service.remove_coupon(cart)
     return {"message": "Coupon removed successfully"}
+
+
+@router.put("/currency", summary="Set the currency to check out in")
+async def set_currency(
+    request: Request,
+    data: SetCartCurrencyRequest,
+    current_user: user_dep,
+    cart_service: cart_dependency,
+):
+    if current_user:
+        cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
+        cart_service.set_currency(cart, data.currency_code)
+        return {"message": f"Currency set to {data.currency_code.upper()}"}
+
+    session_id = request.cookies.get("session_id") or generate_session_id()
+    cart = cart_service.get_or_create_cart(user_id=None, session_id=session_id)
+    cart_service.set_currency(cart, data.currency_code)
+    return _with_session_cookie({"message": f"Currency set to {data.currency_code.upper()}"}, session_id)
+
+
+@router.delete("/currency", summary="Reset checkout currency to the store's base currency")
+async def clear_currency(
+    request: Request,
+    current_user: user_dep,
+    cart_service: cart_dependency,
+):
+    if current_user:
+        cart = cart_service.get_or_create_cart(user_id=current_user.id, session_id=None)
+    else:
+        session_id = request.cookies.get("session_id")
+        if not session_id:
+            return {"message": "Cart is empty"}
+        cart = cart_service.get_or_create_cart(user_id=None, session_id=session_id)
+
+    cart_service.clear_currency(cart)
+    return {"message": "Currency reset to base"}
 

@@ -67,6 +67,7 @@ def _make_order(
         guest_email=f"fbt-buyer-{n}@test.com",
         order_number=f"ORD-FBT-{n}",
         total_amount=20.0 * len(product_ids),
+        currency_code="USD",
         tx_ref=f"tx-fbt-{n}",
         payment_status=payment_status,
     )

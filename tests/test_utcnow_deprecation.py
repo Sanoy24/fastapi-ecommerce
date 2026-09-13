@@ -92,13 +92,16 @@ class TestDirectCallSitesUseTheSharedHelper:
         # Payment.order_id is a real FK, so a full row is needed regardless
         # of the checkout flow that would normally create one.
         order = Order(
-            order_number="DEP-ORDER-1", total_amount=10.0,
+            order_number="DEP-ORDER-1", total_amount=10.0, currency_code="USD",
             tx_ref="DEP-TX-1", guest_email="dep_payment@test.com",
         )
         db_session.add(order)
         db_session.commit()
 
-        payment = Payment(order_id=order.id, amount=10.0, transaction_id="pi_dep_test", payment_method="stripe")
+        payment = Payment(
+            order_id=order.id, amount=10.0, currency_code="USD",
+            transaction_id="pi_dep_test", payment_method="stripe",
+        )
         db_session.add(payment)
         db_session.commit()
 

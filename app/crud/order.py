@@ -172,6 +172,7 @@ class OrderCrud:
         shipping_amount = self._calculate_shipping_amount(shipping_method_id, shipping_address, raw_subtotal)
 
         total_amount = max(0.0, raw_subtotal - discount + tax_amount + shipping_amount)
+        currency_code, exchange_rate = self._resolve_order_currency(cart.currency_code)
 
         order = Order(
             user_id=user_id,
@@ -187,6 +188,8 @@ class OrderCrud:
             tax_amount=tax_amount,
             shipping_amount=shipping_amount,
             total_amount=total_amount,
+            currency_code=currency_code,
+            exchange_rate_at_purchase=exchange_rate,
             status="pending",
             tx_ref=generate_trx_ref(),
         )
@@ -236,6 +239,27 @@ class OrderCrud:
         self.db.refresh(order)
         return order
 
+    def _resolve_order_currency(self, requested_code: str | None) -> tuple[str, float]:
+        """(currency_code, exchange_rate_to_base) to snapshot onto a new
+        Order. requested_code is Cart.currency_code — None means the
+        customer never picked one, i.e. checkout in the base currency.
+
+        Falls back to the base currency rather than failing outright if
+        the requested one has since been deactivated between the customer
+        selecting it and placing the order — checkout shouldn't hard-fail
+        over a currency preference when the order itself is still
+        perfectly fulfillable in the base currency.
+        """
+        from app.core.config import settings
+        from app.crud.currency import CurrencyCrud
+
+        if requested_code:
+            currency = CurrencyCrud(self.db).get_active(requested_code)
+            if currency:
+                return currency.code, float(currency.exchange_rate_to_base)
+
+        return settings.BASE_CURRENCY_CODE, 1.0
+
     def create_renewal_order(self, subscription: Subscription) -> Order:
         """Build and persist an Order for one subscription billing cycle —
         the recurring-order equivalent of create_order, working from a
@@ -270,6 +294,7 @@ class OrderCrud:
         doesn't have enough stock — the caller (process_due_subscriptions_task)
         treats that the same as a payment failure for dunning purposes.
         """
+        from app.core.config import settings
         from app.models.product_variant import ProductVariant
 
         product = self.db.get(Product, subscription.product_id)
@@ -317,6 +342,11 @@ class OrderCrud:
             tax_amount=tax_amount,
             shipping_amount=0.0,
             total_amount=total_amount,
+            # Subscriptions don't carry a currency preference of their own
+            # (no cart to select one against) — every renewal bills in the
+            # base currency.
+            currency_code=settings.BASE_CURRENCY_CODE,
+            exchange_rate_at_purchase=1.0,
             status="pending",
             tx_ref=generate_trx_ref(),
             notes=f"Recurring order for subscription #{subscription.id}",

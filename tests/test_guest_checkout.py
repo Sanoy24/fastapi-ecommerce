@@ -583,7 +583,10 @@ class TestReservationReleaseIsOrderScoped:
         assert db_session.get(Order, order_b.id).user_id is None
 
         from app.models.payment import Payment
-        payment_a = Payment(order_id=order_a.id, amount=order_a.total_amount, transaction_id="pi_fail_a", payment_method="stripe")
+        payment_a = Payment(
+            order_id=order_a.id, amount=order_a.total_amount, currency_code=order_a.currency_code,
+            transaction_id="pi_fail_a", payment_method="stripe",
+        )
         db_session.add(payment_a)
         db_session.commit()
 

@@ -170,6 +170,7 @@ class TestVariantStockDeductionOnPayment:
             order_id=order.id,
             payment_method="stripe",
             amount=order.total_amount,
+            currency_code=order.currency_code,
             status="pending",
             transaction_id="pi_variant_test",
         )
