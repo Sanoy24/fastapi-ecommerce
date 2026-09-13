@@ -18,7 +18,10 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Nullable: an account created via OAuth sign-up (see
+    # UserService.oauth_login) has no password until the user sets one —
+    # see UserService.set_initial_password and has_password below.
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     first_name: Mapped[Optional[str]] = mapped_column(String(100))
     last_name: Mapped[Optional[str]] = mapped_column(String(100))
     phone: Mapped[Optional[str]] = mapped_column(String(20))
@@ -58,3 +61,15 @@ class User(Base):
     wishlist_items: Mapped[List["Wishlist"]] = relationship(
         "Wishlist", back_populates="user", cascade="all, delete-orphan"
     )
+    oauth_accounts: Mapped[List["OAuthAccount"]] = relationship(
+        "OAuthAccount", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    @property
+    def has_password(self) -> bool:
+        """Whether this account can log in with a password, as opposed to
+        being OAuth-only. Exposed on UserPublic so the frontend knows
+        whether to offer "set a password" or "change password", and
+        whether unlinking a provider is safe (see
+        UserService.unlink_oauth_account)."""
+        return self.password_hash is not None

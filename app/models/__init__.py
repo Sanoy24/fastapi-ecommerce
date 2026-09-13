@@ -33,6 +33,7 @@ from .price_drop_subscription import PriceDropSubscription
 from .product_question import ProductQuestion
 from .product_answer import ProductAnswer
 from .saved_payment_method import SavedPaymentMethod
+from .oauth_account import OAuthAccount
 
 __all__ = [
     "User",
@@ -72,4 +73,5 @@ __all__ = [
     "ProductQuestion",
     "ProductAnswer",
     "SavedPaymentMethod",
+    "OAuthAccount",
 ]

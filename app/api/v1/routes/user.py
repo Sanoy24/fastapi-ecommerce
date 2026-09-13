@@ -7,8 +7,12 @@ from app.schema.user_schema import (
     ChangePasswordSchema,
     CreateUserSchema,
     ForgotPasswordSchema,
+    LinkedAccountResponse,
     LoginSchema,
+    OAuthAuthorizationUrlResponse,
+    OAuthCallbackRequest,
     ResetPasswordSchema,
+    SetPasswordSchema,
     TokenSchema,
     UserPublic,
     UpdateUserSchema,
@@ -26,7 +30,7 @@ from app.dependencies import (
 from app.core.limiter import limiter
 from app.core.redis import redis_client
 from arq.connections import ArqRedis
-from typing import Annotated, Union
+from typing import Annotated, List, Union
 
 router = APIRouter(tags=["User"])
 user_dependency = Annotated[UserService, Depends(get_user_service_dep)]
@@ -445,4 +449,88 @@ async def verify_mfa_login(
     challenge_token: str = Body(..., embed=True),
 ) -> TokenSchema:
     return user_service.verify_mfa_login(challenge_token, data.code)
+
+
+@router.post(
+    "/me/password/set",
+    status_code=204,
+    summary="Set an initial password",
+    description="For an OAuth-only account to gain a password-based login option.",
+)
+async def set_initial_password(
+    data: SetPasswordSchema,
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    user_service: user_dependency,
+) -> None:
+    user_service.set_initial_password(current_user.id, data.new_password)
+
+
+# ─── OAuth (social login) ───────────────────────────────────────────────────
+
+
+@router.get(
+    "/oauth/{provider}/authorize",
+    response_model=OAuthAuthorizationUrlResponse,
+    summary="Start an OAuth login/signup",
+    description="Returns the provider's consent-screen URL plus a state token to send back at callback time.",
+)
+async def oauth_authorize(provider: str, user_service: user_dependency) -> OAuthAuthorizationUrlResponse:
+    return await user_service.get_oauth_authorization_url(provider)
+
+
+@router.post(
+    "/oauth/{provider}/callback",
+    response_model=Union[TokenSchema, MFALoginChallenge],
+    summary="Complete OAuth login/signup",
+    description="Exchanges the provider's authorization code for our own tokens, creating an account if needed.",
+)
+@limiter.limit("10/minute")
+async def oauth_callback(
+    request: Request,
+    provider: str,
+    data: OAuthCallbackRequest,
+    user_service: user_dependency,
+) -> Union[TokenSchema, MFALoginChallenge]:
+    return await user_service.oauth_login(provider, data.code, data.state)
+
+
+@router.get(
+    "/oauth/linked",
+    response_model=List[LinkedAccountResponse],
+    summary="List linked OAuth providers",
+)
+async def list_linked_accounts(
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    user_service: user_dependency,
+) -> List[LinkedAccountResponse]:
+    return user_service.list_linked_accounts(current_user.id)
+
+
+@router.post(
+    "/oauth/{provider}/link",
+    response_model=LinkedAccountResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Link an OAuth provider to your account",
+)
+async def link_oauth_account(
+    provider: str,
+    data: OAuthCallbackRequest,
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    user_service: user_dependency,
+) -> LinkedAccountResponse:
+    return await user_service.link_oauth_account(current_user.id, provider, data.code, data.state)
+
+
+@router.delete(
+    "/oauth/{provider}",
+    status_code=204,
+    summary="Unlink an OAuth provider",
+    description="Refused if this is the account's only sign-in method (no password set and no other provider linked).",
+)
+async def unlink_oauth_account(
+    provider: str,
+    current_user: Annotated[UserPublic, Depends(get_current_user)],
+    user_service: user_dependency,
+) -> None:
+    user_service.unlink_oauth_account(current_user.id, provider)
 

@@ -1,15 +1,19 @@
 from datetime import timedelta
+from typing import List
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.redis import RedisClient
+from app.crud.oauth_account import OAuthAccountCrud
 from app.crud.user import UserCrud
 from app.models.user import User
 from app.schema.user_schema import (
     ChangePasswordSchema,
     CreateUserSchema,
+    LinkedAccountResponse,
     LoginSchema,
+    OAuthAuthorizationUrlResponse,
     TokenSchema,
     UpdateUserSchema,
     UserPublic,
@@ -29,6 +33,8 @@ from app.utils.security import (
 _RESET_TOKEN_TTL = 900  # 15 minutes in seconds
 _REFRESH_TOKEN_PREFIX = "refresh:"
 _RESET_TOKEN_PREFIX = "pwd_reset:"
+_OAUTH_STATE_PREFIX = "oauth_state:"
+_OAUTH_STATE_TTL = 600  # 10 minutes — long enough for a provider consent screen
 
 
 class UserService:
@@ -38,11 +44,12 @@ class UserService:
 
         Parameters:
         - db: SQLAlchemy database session.
-        - redis: Optional RedisClient for token revocation and password-reset tokens.
-                 When None, refresh token revocation and password reset are unavailable.
+        - redis: Optional RedisClient for token revocation, password-reset tokens,
+                 and OAuth state. When None, those flows are unavailable.
         """
         self.db = db
         self.crud = UserCrud(db=db)
+        self.oauth_account_crud = OAuthAccountCrud(db=db)
         self.redis = redis
 
     def create_user(self, user_create_data: CreateUserSchema) -> User:
@@ -79,7 +86,9 @@ class UserService:
     def authenticate_user(self, user_login_data: LoginSchema) -> User | None:
         """Return the User if credentials are valid, else None."""
         user = self.crud.get_user_by_email(email=user_login_data.email)
-        if not user:
+        if not user or user.password_hash is None:
+            # password_hash is None for an OAuth-only account (see
+            # UserCrud.create_oauth_user) — there is no password to check.
             return None
         if not verify_password(user_login_data.password, user.password_hash):
             return None
@@ -102,8 +111,14 @@ class UserService:
                 detail="Email not verified",
             )
 
+        return self._issue_login_tokens(user)
+
+    def _issue_login_tokens(self, user: User) -> Union[TokenSchema, MFALoginChallenge]:
+        """Shared tail of every login path (password and OAuth): an MFA
+        challenge if the account has it enabled, otherwise a real token
+        pair. Kept in one place so OAuth login can't accidentally skip the
+        MFA check a password login enforces."""
         if user.mfa_enabled:
-            # Issue a short-lived challenge token
             challenge_token = create_token(
                 data={"sub": str(user.id), "type": "mfa_challenge"},
                 expiration=timedelta(minutes=5),
@@ -245,6 +260,11 @@ class UserService:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        if user.password_hash is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This account has no password yet — use set-password instead",
             )
         if not verify_password(data.current_password, user.password_hash):
             raise HTTPException(
@@ -388,4 +408,144 @@ class UserService:
             token_type="Bearer",
             expires_in=1800,
         )
+
+    def set_initial_password(self, user_id: int, new_password: str) -> None:
+        """For an OAuth-only account (password_hash is NULL) to gain a
+        password-based login option. Distinct from change_password, which
+        requires proving a password that doesn't exist yet — this is the
+        endpoint unlink_oauth_account tells such a user to use before it
+        will let them remove their only sign-in method."""
+        user = self.get_user_by_id(user_id)
+        if user.password_hash is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password already set — use change-password instead",
+            )
+        user.password_hash = hash_password(new_password)
+        self.db.commit()
+
+    # ─── OAuth (social login) ───────────────────────────────────────────
+
+    async def get_oauth_authorization_url(self, provider: str) -> OAuthAuthorizationUrlResponse:
+        import secrets
+
+        from app.services import oauth_provider
+
+        oauth_provider.require_supported_provider(provider)
+        state = secrets.token_urlsafe(24)
+        if self.redis is not None:
+            await self.redis.client.setex(f"{_OAUTH_STATE_PREFIX}{state}", _OAUTH_STATE_TTL, provider)
+        url = oauth_provider.build_authorization_url(provider, state)
+        return OAuthAuthorizationUrlResponse(authorization_url=url, state=state)
+
+    async def _consume_oauth_state(self, provider: str, state: str) -> None:
+        """One-time-use CSRF check: the state this provider redirect carries
+        back must match one we handed out for this exact provider and not
+        have been used already."""
+        if self.redis is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="OAuth login requires Redis. Please try again later.",
+            )
+        key = f"{_OAUTH_STATE_PREFIX}{state}"
+        stored_provider = await self.redis.client.get(key)
+        if not stored_provider or stored_provider != provider:
+            raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+        await self.redis.client.delete(key)
+
+    async def oauth_login(self, provider: str, code: str, state: str) -> Union[TokenSchema, MFALoginChallenge]:
+        """Log in or sign up via an OAuth provider.
+
+        An existing link (provider, provider_user_id) always wins — that
+        identity has already proven itself once. Failing that, an email
+        match against an existing password account only auto-links when
+        the provider itself vouches the email is verified; otherwise
+        someone could take over an existing account just by registering an
+        OAuth identity under the victim's (unverified, provider-side)
+        email address. A brand-new signup has the same requirement, for
+        the same reason applied to account creation instead of takeover.
+        """
+        from app.services import oauth_provider
+
+        await self._consume_oauth_state(provider, state)
+        profile = await oauth_provider.exchange_code_and_fetch_profile(provider, code)
+
+        existing_link = self.oauth_account_crud.get_by_provider_identity(provider, profile.provider_user_id)
+        if existing_link:
+            return self._issue_login_tokens(existing_link.user)
+
+        user = self.crud.get_user_by_email(profile.email)
+        if user:
+            if not profile.email_verified:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"An account with this email already exists. Log in with your "
+                        f"password, then link {provider} from your account settings."
+                    ),
+                )
+            self.oauth_account_crud.create(user.id, provider, profile.provider_user_id, profile.email)
+            return self._issue_login_tokens(user)
+
+        if not profile.email_verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Your {provider} email must be verified to sign up this way",
+            )
+
+        first_name, _, last_name = (profile.name or "").partition(" ")
+        user = self.crud.create_oauth_user(profile.email, first_name or None, last_name or None)
+        self.oauth_account_crud.create(user.id, provider, profile.provider_user_id, profile.email)
+        return self._issue_login_tokens(user)
+
+    async def link_oauth_account(
+        self, user_id: int, provider: str, code: str, state: str
+    ) -> LinkedAccountResponse:
+        """Attach a new provider to an already-authenticated account. No
+        email-verification requirement here (unlike oauth_login) — the
+        user is already proven to own the target account by their session,
+        so this is a "connect" action they're explicitly taking, not an
+        identity claim that needs independent verification."""
+        from app.services import oauth_provider
+
+        await self._consume_oauth_state(provider, state)
+        profile = await oauth_provider.exchange_code_and_fetch_profile(provider, code)
+
+        existing_link = self.oauth_account_crud.get_by_provider_identity(provider, profile.provider_user_id)
+        if existing_link:
+            if existing_link.user_id != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"This {provider} account is already linked to another user",
+                )
+            return LinkedAccountResponse.model_validate(existing_link)
+
+        if self.oauth_account_crud.get_for_user_and_provider(user_id, provider):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"You already have a {provider} account linked — unlink it first",
+            )
+
+        account = self.oauth_account_crud.create(user_id, provider, profile.provider_user_id, profile.email)
+        return LinkedAccountResponse.model_validate(account)
+
+    def unlink_oauth_account(self, user_id: int, provider: str) -> None:
+        account = self.oauth_account_crud.get_for_user_and_provider(user_id, provider)
+        if not account:
+            raise HTTPException(status_code=404, detail=f"No linked {provider} account found")
+
+        user = self.get_user_by_id(user_id)
+        remaining_links = self.oauth_account_crud.list_for_user(user_id)
+        if user.password_hash is None and len(remaining_links) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot unlink your only sign-in method — set a password first",
+            )
+        self.oauth_account_crud.delete(account)
+
+    def list_linked_accounts(self, user_id: int) -> List[LinkedAccountResponse]:
+        return [
+            LinkedAccountResponse.model_validate(a)
+            for a in self.oauth_account_crud.list_for_user(user_id)
+        ]
 

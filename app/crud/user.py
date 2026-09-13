@@ -35,6 +35,27 @@ class UserCrud:
                 detail="Failed to create user",
             )
 
+    def create_oauth_user(
+        self, email: str, first_name: Optional[str], last_name: Optional[str]
+    ) -> User:
+        """A user created via OAuth sign-up (see UserService.oauth_login)
+        has no password of their own — password_hash stays NULL until they
+        set one (see UserService.set_initial_password) — and is verified
+        immediately since the provider already vouched for the email
+        (OAuthProfile.email_verified)."""
+        db_user = User(
+            email=email,
+            password_hash=None,
+            first_name=first_name,
+            last_name=last_name,
+            phone=None,
+            is_verified=True,
+        )
+        self.db.add(db_user)
+        self.db.commit()
+        self.db.refresh(db_user)
+        return db_user
+
     def get_user(self, user_id: int) -> Optional[User]:
         """
         Retrieve a single user by ID.
