@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Sequence
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select
@@ -15,12 +15,13 @@ from app.models.coupon_usage import CouponUsage
 from app.models.inventory_reservation import InventoryReservation
 from app.models.inventory_transaction import InventoryTransaction
 from app.models.shipment import Shipment
+from app.models.subscription import Subscription
 from app.core.exceptions import OrderException
 from app.models.user import User
 from app.utils.order_utils import generate_order_number, generate_trx_ref
 from app.crud.address import AddressCrud
 from app.schema.order_schema import GuestAddressInput
-from app.services.pricing import calculate_coupon_discount, calculate_promotion_discount, get_unit_price
+from app.services.pricing import LineItemLike, calculate_coupon_discount, calculate_promotion_discount, get_unit_price
 
 
 class OrderCrud:
@@ -235,6 +236,133 @@ class OrderCrud:
         self.db.refresh(order)
         return order
 
+    def create_renewal_order(self, subscription: Subscription) -> Order:
+        """Build and persist an Order for one subscription billing cycle —
+        the recurring-order equivalent of create_order, working from a
+        fixed (product, variant, quantity) spec instead of a live cart.
+
+        A background renewal must never go through get_cart_items: that
+        method matches every CartItem across every cart a user owns with
+        no cart_id filtering, so if this ever created a persistent "cart"
+        to hang line items off, a customer's real in-progress shopping
+        cart could get swept into a subscription's charge (or vice versa)
+        the next time either one checks out. Building the Order directly
+        avoids needing a cart to exist at all.
+
+        Reuses validate_address, _calculate_tax_amount, _address_snapshot,
+        and _create_order_items_and_reserve_stock — the same tax/stock/
+        snapshot logic a normal checkout goes through — by duck-typing a
+        plain (non-ORM) line-item object exposing the same
+        product_id/variant_id/quantity/product/variant attributes
+        get_unit_price and _calculate_tax_amount read off a real CartItem.
+        A real transient CartItem would work too, but assigning its
+        product/variant relationships in Python without adding it to the
+        session trips SQLAlchemy's autoflush cascade check on the
+        back_populates side (Product.cart_items) — harmless (it correctly
+        declines to proceed) but noisy, logging a SAWarning on every
+        renewal for no actual effect.
+
+        No coupon/promotion discount and no shipping-method lookup here:
+        those are one-time checkout inputs, not something a background job
+        should silently re-decide months into a subscription.
+
+        Raises OrderException if the product/variant no longer exists or
+        doesn't have enough stock — the caller (process_due_subscriptions_task)
+        treats that the same as a payment failure for dunning purposes.
+        """
+        from app.models.product_variant import ProductVariant
+
+        product = self.db.get(Product, subscription.product_id)
+        if not product:
+            raise OrderException(f"Product not found: {subscription.product_id}")
+
+        variant = None
+        if subscription.variant_id:
+            variant = self.db.get(ProductVariant, subscription.variant_id)
+            if not variant:
+                raise OrderException(f"Variant not found: {subscription.variant_id}")
+
+        available = variant.available_stock if variant else product.available_stock
+        if available < subscription.quantity:
+            label = variant.sku if variant else product.name
+            raise OrderException(f"Not enough stock for {label}. Available: {available}")
+
+        shipping_address = self.validate_address(subscription.user_id, subscription.shipping_address_id)
+        billing_address = self.validate_address(subscription.user_id, subscription.billing_address_id)
+
+        from types import SimpleNamespace
+
+        line_item = SimpleNamespace(
+            product_id=product.id,
+            variant_id=variant.id if variant else None,
+            quantity=subscription.quantity,
+            product=product,
+            variant=variant,
+        )
+
+        raw_subtotal = get_unit_price(line_item) * subscription.quantity
+        region = shipping_address.state or shipping_address.country
+        tax_amount = self._calculate_tax_amount([line_item], region)
+        total_amount = max(0.0, raw_subtotal + tax_amount)
+
+        order = Order(
+            user_id=subscription.user_id,
+            shipping_address_id=subscription.shipping_address_id,
+            billing_address_id=subscription.billing_address_id,
+            shipping_address_snapshot=self._address_snapshot(shipping_address),
+            billing_address_snapshot=self._address_snapshot(billing_address),
+            order_number=generate_order_number(),
+            subtotal=raw_subtotal,
+            discount_amount=0.0,
+            tax_amount=tax_amount,
+            shipping_amount=0.0,
+            total_amount=total_amount,
+            status="pending",
+            tx_ref=generate_trx_ref(),
+            notes=f"Recurring order for subscription #{subscription.id}",
+        )
+        self.db.add(order)
+        self.db.flush()  # Get order.id
+
+        self._create_order_items_and_reserve_stock(order, [line_item], subscription.user_id)
+
+        event = OrderEvent(
+            order_id=order.id,
+            from_status=None,
+            to_status="pending",
+            note="Subscription renewal order placed",
+            created_by=subscription.user_id,
+        )
+        self.db.add(event)
+
+        self.db.commit()
+        self.db.refresh(order)
+        return order
+
+    def cancel_renewal_order(self, order: Order) -> None:
+        """Release a failed renewal's stock reservation and mark the order
+        cancelled — the non-HTTP equivalent of OrderService.cancel_order,
+        used from the background billing task rather than the API, where
+        raising HTTPException would make no sense."""
+        reservations = self.db.query(InventoryReservation).filter(
+            InventoryReservation.order_id == order.id
+        ).all()
+        for res in reservations:
+            self.db.delete(res)
+
+        order.status = "cancelled"
+        order.cancelled_at = func.current_timestamp()
+
+        event = OrderEvent(
+            order_id=order.id,
+            from_status="pending",
+            to_status="cancelled",
+            note="Cancelled: subscription renewal payment failed",
+            created_by=order.user_id,
+        )
+        self.db.add(event)
+        self.db.commit()
+
     @staticmethod
     def _address_snapshot(addr) -> dict:
         return {
@@ -267,7 +395,7 @@ class OrderCrud:
         discount += promo_discount
         return discount
 
-    def _calculate_tax_amount(self, items: list[CartItem], region: str | None) -> float:
+    def _calculate_tax_amount(self, items: Sequence[LineItemLike], region: str | None) -> float:
         from app.models.tax_rate import TaxRate
 
         tax_rates = self.db.scalars(select(TaxRate).where(TaxRate.is_active)).all()
@@ -333,7 +461,7 @@ class OrderCrud:
 
         return shipping_amount
 
-    def _create_order_items_and_reserve_stock(self, order: Order, items: list[CartItem], user_id: int | None) -> None:
+    def _create_order_items_and_reserve_stock(self, order: Order, items: Sequence[LineItemLike], user_id: int | None) -> None:
         """Create OrderItem rows and reserve stock instead of deducting it directly.
         Actual deduction happens on successful payment — see
         PaymentService._handle_successful_payment.

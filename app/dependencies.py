@@ -26,6 +26,7 @@ from app.services.saved_payment_method_service import SavedPaymentMethodService
 from app.services.product_service import ProductService
 from app.services.promotion_service import PromotionService
 from app.services.review_service import ReviewService
+from app.services.subscription_service import SubscriptionService
 from app.services.user_service import UserService
 from app.utils.security import TokenError, decode_access_token
 
@@ -194,6 +195,9 @@ def get_product_qa_service_dep(db: Session = Depends(get_db)) -> ProductQAServic
 
 def get_saved_payment_method_service_dep(db: Session = Depends(get_db)) -> SavedPaymentMethodService:
     return SavedPaymentMethodService(db)
+
+def get_subscription_service_dep(db: Session = Depends(get_db)) -> SubscriptionService:
+    return SubscriptionService(db)
 
 def get_arq_pool(request: Request) -> ArqRedis | None:
     """Get the ARQ Redis pool attached to the app state."""

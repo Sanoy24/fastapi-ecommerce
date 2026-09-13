@@ -9,7 +9,7 @@ applied in the cart display were never applied when the order was created.
 Both now call these functions so the charged total always matches the
 displayed total.
 """
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Optional, Protocol, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,9 +17,27 @@ from sqlalchemy.orm import Session
 from app.models.cart_item import CartItem
 from app.models.promotion import Promotion
 
+if TYPE_CHECKING:
+    from app.models.product import Product
+    from app.models.product_variant import ProductVariant
 
-def get_unit_price(item: CartItem) -> float:
-    """Effective per-unit price for a cart item, honoring active product sales."""
+
+class LineItemLike(Protocol):
+    """Structural shape get_unit_price (and _calculate_tax_amount /
+    _create_order_items_and_reserve_stock in app/crud/order.py) actually
+    need — satisfied by a real CartItem, and by the plain (non-ORM) object
+    OrderCrud.create_renewal_order builds for a subscription's line item,
+    which has no cart to belong to."""
+
+    product_id: int
+    variant_id: Optional[int]
+    quantity: int
+    product: "Product"
+    variant: Optional["ProductVariant"]
+
+
+def get_unit_price(item: LineItemLike) -> float:
+    """Effective per-unit price for a line item, honoring active product sales."""
     if item.variant_id and item.variant:
         return float(item.variant.price)
     return float(item.product.effective_price)

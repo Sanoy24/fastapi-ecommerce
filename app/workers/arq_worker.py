@@ -391,6 +391,145 @@ async def compute_frequently_bought_together_task(ctx):
     )
 
 
+async def process_due_subscriptions_task(ctx):
+    """
+    Charge every subscription due for renewal today.
+
+    For each due subscription: build a new Order for that cycle's item
+    (see OrderCrud.create_renewal_order), then attempt an off-session
+    PaymentIntent against the subscription's saved payment method —
+    off_session=True + confirm=True because there is no customer present
+    to confirm anything client-side, unlike a normal checkout.
+
+    A successful charge still goes through the existing
+    payment_intent.succeeded webhook to actually deduct stock and mark the
+    order paid — this task's own read of the PaymentIntent status is only
+    used to decide the *subscription's* fate (advance / retry / cancel),
+    not to duplicate the order-fulfillment logic
+    PaymentService._handle_successful_payment already owns. In the rare
+    case where Stripe's synchronous response isn't "succeeded" but the
+    webhook later reports success anyway, the order still completes
+    correctly — only the subscription's own state might lag by one cycle.
+    """
+    import stripe
+
+    from app.core.config import settings
+    from app.core.exceptions import OrderException
+    from app.crud.payment import PaymentCrud
+    from app.crud.subscription import SubscriptionCrud
+    from app.models.user import User
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+
+    logger.info("Starting subscription renewal processing")
+
+    def _process():
+        def _failure_result(subscription, user, product_name, cancelled):
+            if cancelled:
+                return {"kind": "cancelled", "email": user.email, "product_name": product_name}
+            return {
+                "kind": "failed",
+                "email": user.email,
+                "product_name": product_name,
+                "retry_date": subscription.next_billing_date.strftime("%B %d, %Y"),
+            }
+
+        results = []
+        with SessionLocal() as db:
+            subscription_crud = SubscriptionCrud(db)
+            payment_crud = PaymentCrud(db)
+
+            for subscription in subscription_crud.list_due(utcnow()):
+                user = db.get(User, subscription.user_id)
+                product_name = subscription.product.name
+
+                try:
+                    order = subscription_crud.create_renewal_order(subscription)
+                except OrderException as e:
+                    cancelled = subscription_crud.record_renewal_failure(subscription, str(e))
+                    results.append(_failure_result(subscription, user, product_name, cancelled))
+                    continue
+
+                method = subscription.saved_payment_method
+                try:
+                    intent = stripe.PaymentIntent.create(
+                        amount=int(order.total_amount * 100),
+                        currency="usd",
+                        customer=user.stripe_customer_id,
+                        payment_method=method.stripe_payment_method_id,
+                        off_session=True,
+                        confirm=True,
+                        metadata={
+                            "order_id": str(order.id),
+                            "subscription_id": str(subscription.id),
+                            "user_id": str(subscription.user_id),
+                        },
+                    )
+                except stripe.error.StripeError as e:
+                    subscription_crud.cancel_renewal_order(order)
+                    cancelled = subscription_crud.record_renewal_failure(subscription, str(e))
+                    results.append(_failure_result(subscription, user, product_name, cancelled))
+                    continue
+
+                payment_crud.create_payment(
+                    order_id=order.id,
+                    amount=order.total_amount,
+                    transaction_id=intent.id,
+                    payment_method="stripe",
+                )
+
+                if intent.status == "succeeded":
+                    subscription_crud.record_renewal_success(subscription)
+                    results.append({
+                        "kind": "success",
+                        "email": user.email,
+                        "product_name": product_name,
+                        "order_number": order.order_number,
+                        "amount": float(order.total_amount),
+                    })
+                else:
+                    # requires_action / processing / etc. can't complete
+                    # without a customer present — treat as a dunning-worthy
+                    # failure rather than leaving the order in limbo.
+                    subscription_crud.cancel_renewal_order(order)
+                    cancelled = subscription_crud.record_renewal_failure(
+                        subscription, f"Payment requires action (status={intent.status})"
+                    )
+                    results.append(_failure_result(subscription, user, product_name, cancelled))
+
+        return results
+
+    loop = asyncio.get_running_loop()
+    results = await loop.run_in_executor(None, _process)
+
+    from app.services.email_service import (
+        send_subscription_cancelled_email,
+        send_subscription_payment_failed_email,
+        send_subscription_renewed_email,
+    )
+
+    for result in results:
+        if result["kind"] == "success":
+            await send_subscription_renewed_email(
+                to_address=result["email"],
+                product_name=result["product_name"],
+                order_number=result["order_number"],
+                amount=result["amount"],
+            )
+        elif result["kind"] == "cancelled":
+            await send_subscription_cancelled_email(
+                to_address=result["email"], product_name=result["product_name"]
+            )
+        else:
+            await send_subscription_payment_failed_email(
+                to_address=result["email"],
+                product_name=result["product_name"],
+                retry_date=result["retry_date"],
+            )
+
+    logger.info(f"Finished subscription renewal processing — {len(results)} subscription(s) processed")
+
+
 async def startup(ctx):
     logger.info("ARQ Worker starting...")
 
@@ -427,6 +566,7 @@ class WorkerSettings:
         process_outbox_events_task,
         cleanup_completed_outbox_events_task,
         compute_frequently_bought_together_task,
+        process_due_subscriptions_task,
     ]
 
     cron_jobs = [
@@ -440,6 +580,7 @@ class WorkerSettings:
              hour=3, minute=0),  # once a day
         cron(compute_frequently_bought_together_task,
              hour=1, minute=0),  # once a day
+        cron(process_due_subscriptions_task, hour=5, minute=0),  # once a day
     ]
     redis_settings = RedisSettings(host=host, port=port, database=database)
     on_startup = startup

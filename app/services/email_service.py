@@ -303,3 +303,77 @@ async def send_price_drop_email(
         html_body=html_body,
         text_body=text_body,
     )
+
+
+async def send_subscription_renewed_email(
+    to_address: str, product_name: str, order_number: str, amount: float
+) -> None:
+    """Sent by app.workers.arq_worker.process_due_subscriptions_task after
+    a recurring charge succeeds."""
+    html_body = f"""
+    <html><body>
+    <h2>Your {product_name} subscription renewed</h2>
+    <p>Order <strong>#{order_number}</strong> was placed and charged: <strong>${amount:.2f}</strong>.</p>
+    <p>We'll notify you again ahead of your next renewal if anything needs your attention.</p>
+    </body></html>
+    """
+    text_body = (
+        f"Your {product_name} subscription renewed.\n\n"
+        f"Order #{order_number} was placed and charged: ${amount:.2f}.\n"
+    )
+    await send_email(
+        to_address=to_address,
+        subject=f"Your {product_name} subscription renewed",
+        html_body=html_body,
+        text_body=text_body,
+    )
+
+
+async def send_subscription_payment_failed_email(
+    to_address: str, product_name: str, retry_date: str
+) -> None:
+    """Sent by process_due_subscriptions_task when a renewal charge fails
+    but the subscription still has retries left (see
+    app.utils.subscription_billing.RETRY_SCHEDULE_DAYS)."""
+    html_body = f"""
+    <html><body>
+    <h2>We couldn't renew your {product_name} subscription</h2>
+    <p>Your payment method was declined. We'll try again on <strong>{retry_date}</strong> —
+    updating your saved payment method before then will help it go through.</p>
+    </body></html>
+    """
+    text_body = (
+        f"We couldn't renew your {product_name} subscription.\n\n"
+        f"Your payment method was declined. We'll try again on {retry_date} — "
+        f"updating your saved payment method before then will help it go through."
+    )
+    await send_email(
+        to_address=to_address,
+        subject=f"Payment failed for your {product_name} subscription",
+        html_body=html_body,
+        text_body=text_body,
+    )
+
+
+async def send_subscription_cancelled_email(to_address: str, product_name: str) -> None:
+    """Sent by process_due_subscriptions_task once a subscription is
+    cancelled automatically after exhausting all renewal retries."""
+    html_body = f"""
+    <html><body>
+    <h2>Your {product_name} subscription has been cancelled</h2>
+    <p>We were unable to charge your payment method after several attempts, so this
+    subscription has been cancelled. You can start a new one any time with an
+    updated payment method.</p>
+    </body></html>
+    """
+    text_body = (
+        f"Your {product_name} subscription has been cancelled.\n\n"
+        f"We were unable to charge your payment method after several attempts. "
+        f"You can start a new one any time with an updated payment method."
+    )
+    await send_email(
+        to_address=to_address,
+        subject=f"Your {product_name} subscription was cancelled",
+        html_body=html_body,
+        text_body=text_body,
+    )
