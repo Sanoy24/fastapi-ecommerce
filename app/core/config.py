@@ -31,6 +31,16 @@ class Setting(BaseSettings):
     # Frontend base URL (used in password-reset links)
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # OAuth (social login) — registered with each provider's own developer
+    # console. OAUTH_REDIRECT_URI is a single shared callback page on the
+    # frontend (it reads `code`/`state` off its own URL and POSTs them to
+    # this API); it must match exactly what's registered with each provider.
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    FACEBOOK_CLIENT_ID: str = ""
+    FACEBOOK_CLIENT_SECRET: str = ""
+    OAUTH_REDIRECT_URI: str = "http://localhost:3000/auth/callback"
+
     # File storage: "local" or "s3"
     STORAGE_BACKEND: str = "local"
     UPLOAD_DIR: str = "uploads"

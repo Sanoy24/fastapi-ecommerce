@@ -30,6 +30,7 @@ class UserPublic(BaseModel):
     role: str
     is_verified: bool
     mfa_enabled: bool = False
+    has_password: bool = True
     addresses: list[AddressPublic] = []
     created_at: datetime
     updated_at: datetime
@@ -106,4 +107,38 @@ class MFAVerifyRequest(BaseModel):
 class MFALoginChallenge(BaseModel):
     mfa_required: bool
     mfa_challenge_token: str
+
+
+class SetPasswordSchema(BaseModel):
+    """For an OAuth-only account gaining a password-based login option —
+    distinct from ChangePasswordSchema, which requires proving a password
+    that doesn't exist yet."""
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_strength(cls, v: str) -> str:
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+class OAuthAuthorizationUrlResponse(BaseModel):
+    authorization_url: str
+    state: str
+
+
+class OAuthCallbackRequest(BaseModel):
+    code: str
+    state: str
+
+
+class LinkedAccountResponse(BaseModel):
+    provider: str
+    email: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
