@@ -84,6 +84,7 @@ class ProductService:
         per_page: int,
         search: str | None = None,
         category_id: int | None = None,
+        brand_id: int | None = None,
         min_price: float | None = None,
         max_price: float | None = None,
         min_rating: float | None = None,
@@ -99,6 +100,7 @@ class ProductService:
             per_page: Items per page
             search: Search term for name/description
             category_id: Filter by category
+            brand_id: Filter by brand
             min_price: Minimum price
             max_price: Maximum price
             min_rating: Minimum average rating (0-5)
@@ -112,6 +114,7 @@ class ProductService:
                 per_page,
                 search,
                 category_id,
+                brand_id,
                 min_price,
                 max_price,
                 min_rating,
@@ -119,6 +122,17 @@ class ProductService:
                 sort_by,
                 sort_order,
             )
+            # PaginatedResponse is constructed unparameterized in the CRUD
+            # (bare `PaginatedResponse(data=items, ...)`, not
+            # `PaginatedResponse[ProductResponse](...)`), so Pydantic never
+            # coerces `.data` and it stays raw Product ORM instances. That's
+            # invisible on an empty page, but on any page with results the
+            # @cache decorator on the route tries to encode this return
+            # value directly — below FastAPI's own response_model
+            # conversion — and a raw ORM object isn't encodable, crashing
+            # every real call with a 500. get_all_products_cursor below
+            # already guards against exactly this; mirrored here.
+            products.data = [ProductResponse.model_validate(p) for p in products.data]
             return products
         except Exception as e:
             logger.info(f"exception: {e}")

@@ -6,6 +6,7 @@ from sqlalchemy import (
     Numeric,
     ForeignKey,
     Text,
+    JSON,
     func,
     select,
     Index,
@@ -38,6 +39,14 @@ class Product(Base):
     image_url: Mapped[Optional[str]] = mapped_column(String(500))
     category_id: Mapped[Optional[int]] = mapped_column(ForeignKey("categories.id"))
     brand_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brands.id"))
+
+    # Free-form spec data whose shape varies by category — e.g. {"ram_gb":
+    # 16, "screen_in": 14} for a laptop, {"material": "cotton", "care":
+    # "machine wash cold"} for apparel. Mirrors ProductVariant.attributes'
+    # same JSON-blob convention rather than a fixed EAV table, since a
+    # general-merchandise catalog has no single spec shape to normalize
+    # against.
+    attributes: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Status
     status: Mapped[str] = mapped_column(String(20), default="draft", server_default="draft")
