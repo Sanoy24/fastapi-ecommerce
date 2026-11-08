@@ -205,8 +205,7 @@ class CartService:
         }
 
     def apply_coupon(self, cart: Cart, code: str) -> Cart:
-        clean_code = code.strip().upper()
-        coupon = self.db.execute(select(Coupon).where(Coupon.code == clean_code)).scalar_one_or_none()
+        coupon = self.db.execute(select(Coupon).where(Coupon.code == code)).scalar_one_or_none()
         if not coupon:
             raise HTTPException(status_code=404, detail="Coupon not found")
 
