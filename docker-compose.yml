@@ -12,10 +12,15 @@ services:
 
     volumes:
       - .:/app
+    # Docker-network hostnames; these override .env, which holds
+    # localhost URLs for running the app outside Docker.
     environment:
       - ENV=development
-      - REDIS_URL=${REDIS_URL:-redis://redis-app:6379/0}
-      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/ecommerce}
+      - REDIS_URL=redis://redis-app:6379/0
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ecommerce
+      - ELASTIC_URL=http://elasticsearch:9200
+      - LOKI_URL=http://loki:3100/loki/api/v1/push
+      - OTLP_ENDPOINT=http://tempo:4317
     env_file:
       - .env
     command: >
@@ -33,10 +38,15 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
+    # Docker-network hostnames; these override .env, which holds
+    # localhost URLs for running the app outside Docker.
     environment:
       - ENV=development
-      - REDIS_URL=${REDIS_URL:-redis://redis-app:6379/0}
-      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/ecommerce}
+      - REDIS_URL=redis://redis-app:6379/0
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ecommerce
+      - ELASTIC_URL=http://elasticsearch:9200
+      - LOKI_URL=http://loki:3100/loki/api/v1/push
+      - OTLP_ENDPOINT=http://tempo:4317
     env_file:
       - .env
     command: >
@@ -50,7 +60,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=ecommerce
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

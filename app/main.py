@@ -180,9 +180,10 @@ if "pytest" not in sys.modules:
     trace.set_tracer_provider(TracerProvider(resource=resource))
     tracer = trace.get_tracer(__name__)
 
-    otlp_exporter = OTLPSpanExporter(endpoint="http://tempo:4317", insecure=True)
-    span_processor = BatchSpanProcessor(otlp_exporter)
-    trace.get_tracer_provider().add_span_processor(span_processor)  # type: ignore[attr-defined]
+    if settings.OTLP_ENDPOINT:
+        otlp_exporter = OTLPSpanExporter(endpoint=settings.OTLP_ENDPOINT, insecure=True)
+        span_processor = BatchSpanProcessor(otlp_exporter)
+        trace.get_tracer_provider().add_span_processor(span_processor)  # type: ignore[attr-defined]
 
     FastAPIInstrumentor.instrument_app(app)
 

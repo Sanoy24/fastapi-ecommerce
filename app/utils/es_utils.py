@@ -36,10 +36,10 @@ async def create_product_index(es: AsyncElasticsearch):
 
     if await es.indices.exists(index="products"):
         await es.indices.delete(index="products")
-        print("Deleted old 'products' index")
+        logger.info("Deleted old 'products' index")
 
     await es.indices.create(index="products", body=mapping)
-    print("Created fresh 'products' index")
+    logger.info("Created fresh 'products' index")
 
 
 def get_all_products():
@@ -51,7 +51,6 @@ def get_all_products():
 async def bulk_index_products(es: AsyncElasticsearch):
     """populate elastic index from existing products"""
     products = get_all_products()
-    print(products[0])
 
     actions = []
 

@@ -6,6 +6,8 @@ from pathlib import Path
 import logging_loki
 from loguru import logger
 
+from app.core.config import settings
+
 # Logs directory inside app/
 log_dir = Path("logs")
 log_dir.mkdir(parents=True, exist_ok=True)
@@ -62,10 +64,10 @@ class LokiSink:
         )
         self.handler.emit(log_record)
 
-if "pytest" not in sys.modules:
+if "pytest" not in sys.modules and settings.LOKI_URL:
     try:
         loki_handler = logging_loki.LokiHandler(
-            url="http://loki:3100/loki/api/v1/push",
+            url=settings.LOKI_URL,
             tags={"job": "fastapi-app"},
             version="1",
         )
@@ -79,7 +81,7 @@ if "pytest" not in sys.modules:
         logger.add(LokiSink(loki_handler), level="INFO", enqueue=True)
     except Exception as e:
         # Fallback if Loki is not available or lib is missing
-        print(f"Failed to initialize Loki handler: {e}")
+        logger.warning(f"Failed to initialize Loki handler: {e}")
 
 # Export the logger instance
 __all__ = ["logger"]
