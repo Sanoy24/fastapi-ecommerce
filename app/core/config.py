@@ -60,6 +60,11 @@ class Setting(BaseSettings):
     AWS_ACCESS_KEY: str = ""
     AWS_SECRET_KEY: str = ""
 
+    # Loki log shipping; set to empty to disable (e.g. running outside Docker)
+    LOKI_URL: str = "http://loki:3100/loki/api/v1/push"
+    # OpenTelemetry trace export (Tempo); set to empty to disable
+    OTLP_ENDPOINT: str = "http://tempo:4317"
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False
     )

@@ -41,5 +41,4 @@ Dockerfile
 
 # Docs / scratch notes
 *.md
-datamodel.txt
-DDL.sql
+docs/

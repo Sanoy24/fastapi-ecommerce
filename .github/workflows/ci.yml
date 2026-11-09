@@ -1,6 +1,13 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  # Weekly run so newly published advisories (pip-audit) surface on main
+  # instead of blocking the next unrelated PR.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 jobs:
   lint-and-typecheck:
@@ -109,9 +116,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fresh_migration_check
           JWT_SECRET_KEY: test_secret_key_at_least_32_characters_long
-        run: |
-          sed -i "s#sqlalchemy.url = .*#sqlalchemy.url = ${DATABASE_URL}#" alembic.ini
-          alembic upgrade head
+        # alembic/env.py reads DATABASE_URL from the environment.
+        run: alembic upgrade head
 
   docker-build:
     runs-on: ubuntu-latest
