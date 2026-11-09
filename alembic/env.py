@@ -11,8 +11,10 @@ import app.models
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-# Use the app's DATABASE_URL (from .env) instead of the hardcoded alembic.ini value
-config.set_main_option("sqlalchemy.url", settings.Database_url.replace("%", "%%"))
+# alembic.ini leaves sqlalchemy.url empty, so fall back to the app's DATABASE_URL
+# (.env). Callers that set it programmatically (e.g. the migration tests) win.
+if not config.get_main_option("sqlalchemy.url"):
+    config.set_main_option("sqlalchemy.url", settings.Database_url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
