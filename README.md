@@ -20,7 +20,7 @@ A production-oriented e-commerce backend built with FastAPI: full catalog and ch
 ## Tech Stack
 
 -   **Framework**: [FastAPI](https://fastapi.tiangolo.com/)
--   **Language**: Python 3.10+
+-   **Language**: Python 3.11+
 -   **Database**: PostgreSQL, via [SQLAlchemy](https://www.sqlalchemy.org/) 2.x and [Alembic](https://alembic.sqlalchemy.org/) migrations
 -   **Cache / Background jobs**: Redis, [ARQ](https://arq-docs.helpmanual.io/)
 -   **Search**: Elasticsearch
@@ -33,7 +33,7 @@ A production-oriented e-commerce backend built with FastAPI: full catalog and ch
 
 ## Prerequisites
 
--   Python 3.10 or higher
+-   Python 3.11 or higher
 -   Docker and Docker Compose (recommended — the app needs PostgreSQL, Redis, and Elasticsearch to fully start; Compose runs all of them together)
 -   A Stripe account (test-mode keys) if you want to exercise the payment/subscription flows
 -   Git
