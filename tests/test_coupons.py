@@ -147,3 +147,14 @@ class TestCoupons:
         data = resp.json()
         assert data["discount_amount"] == 0.0
         assert data["total_amount"] == 100.0
+
+    def test_apply_coupon_exceeds_max_length_returns_422(self, client: TestClient, db_session: Session):
+        _make_user(db_session)
+        user_token = _login(client, "user_coupon@test.com", "UserCoupon1")
+        long_code = "A" * 51
+        resp = client.post(
+            f"/cart/coupon?code={long_code}",
+            headers={"Authorization": f"Bearer {user_token}"}
+        )
+        assert resp.status_code == 422
+

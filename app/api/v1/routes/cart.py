@@ -118,7 +118,7 @@ async def remove_item(
 @router.post("/coupon")
 async def apply_coupon(
     request: Request,
-    code: Annotated[str, Query(min_length=2, max_length=50, pattern=r"^[A-Za-z0-9_-]+$")],
+    code: Annotated[str, Query(max_length=50)],
     current_user: user_dep,
     cart_service: cart_dependency,
 ):
