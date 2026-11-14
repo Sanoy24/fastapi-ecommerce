@@ -64,7 +64,7 @@ opentelemetry-proto==1.45.2 ; python_version >= "3.11" and python_version < "4.0
 opentelemetry-sdk==1.45.2 ; python_version >= "3.11" and python_version < "4.0"
 opentelemetry-semantic-conventions==0.66b2 ; python_version >= "3.11" and python_version < "4.0"
 opentelemetry-util-http==0.66b2 ; python_version >= "3.11" and python_version < "4.0"
-packaging==25.0 ; python_version >= "3.11" and python_version < "4.0"
+packaging==26.3 ; python_version >= "3.11" and python_version < "4.0"
 passlib==1.7.4 ; python_version >= "3.11" and python_version < "4.0"
 pendulum==3.2.0 ; python_version >= "3.11" and python_version < "4.0"
 pillow==13.0.0 ; python_version >= "3.11" and python_version < "4.0"
