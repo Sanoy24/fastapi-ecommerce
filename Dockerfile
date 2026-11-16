@@ -1,5 +1,5 @@
 # --- Builder stage: compile/download dependencies with build tools ---
-FROM python:3.12-slim AS builder
+FROM python:3.15-slim AS builder
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 
 # --- Runtime stage: slim image, no compilers, non-root user ---
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 WORKDIR /app
 
