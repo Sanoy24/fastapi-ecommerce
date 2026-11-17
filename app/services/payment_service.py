@@ -147,7 +147,17 @@ class PaymentService:
 
         provider_event_id = event["id"]
 
-        # Deduplication using database unique constraint
+        # The event record and the work it triggers are committed together.
+        # Recording the event id first and processing afterwards (in separate
+        # commits) loses payments: if processing crashes, Stripe retries the
+        # same event, the retry hits the unique constraint, and is ignored as
+        # a duplicate, so the customer is charged but the order stays unpaid.
+        # Here a crash rolls back the event record too, the endpoint returns
+        # an error, and Stripe's retry is processed normally.
+        #
+        # Deduplication still uses the unique constraint: flush() inserts the
+        # row inside the open transaction, so a concurrent delivery of the
+        # same event waits on the index and then fails with IntegrityError.
         try:
             payment_event = PaymentEvent(
                 event_type=event["type"],
@@ -156,26 +166,29 @@ class PaymentService:
                 is_duplicate=False
             )
             self.db.add(payment_event)
-            self.db.commit()
-            self.db.refresh(payment_event)
+            self.db.flush()
         except IntegrityError:
             self.db.rollback()
             return {"status": "success", "detail": "Duplicate event ignored"}
 
-        # Attempt to link event to payment if transaction_id is present
-        payment_intent = event["data"]["object"]
-        transaction_id = payment_intent.get("id")
-        payment = None
-        if transaction_id:
-            payment = self.payment_crud.get_payment_by_transaction_id(transaction_id)
-            if payment:
-                payment_event.payment_id = payment.id
-                self.db.commit()
+        try:
+            # Link the event to its payment if there is one.
+            payment_intent = event["data"]["object"]
+            transaction_id = payment_intent.get("id")
+            if transaction_id:
+                payment = self.payment_crud.get_payment_by_transaction_id(transaction_id)
+                if payment:
+                    payment_event.payment_id = payment.id
 
-        if event["type"] == "payment_intent.succeeded":
-            self._handle_successful_payment(payment_intent)
-        elif event["type"] == "payment_intent.payment_failed":
-            self._handle_failed_payment(payment_intent)
+            if event["type"] == "payment_intent.succeeded":
+                self._handle_successful_payment(payment_intent)
+            elif event["type"] == "payment_intent.payment_failed":
+                self._handle_failed_payment(payment_intent)
+
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
 
         return {"status": "success"}
 
@@ -183,7 +196,7 @@ class PaymentService:
         transaction_id = payment_intent["id"]
         payment = self.payment_crud.get_payment_by_transaction_id(transaction_id)
         if payment:
-            self.payment_crud.update_payment_status(payment, "completed")
+            self.payment_crud.update_payment_status(payment, "completed", commit=False)
 
             # Update Order Status
             order = self.db.get(Order, payment.order_id)
@@ -263,7 +276,7 @@ class PaymentService:
         transaction_id = payment_intent["id"]
         payment = self.payment_crud.get_payment_by_transaction_id(transaction_id)
         if payment:
-            self.payment_crud.update_payment_status(payment, "failed")
+            self.payment_crud.update_payment_status(payment, "failed", commit=False)
 
             # Update Order Status
             order = self.db.get(Order, payment.order_id)

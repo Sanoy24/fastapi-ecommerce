@@ -33,10 +33,16 @@ class PaymentCrud:
         stmt = select(Payment).where(Payment.transaction_id == transaction_id)
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def update_payment_status(self, payment: Payment, status: str):
+    def update_payment_status(self, payment: Payment, status: str, *, commit: bool = True):
+        """Set a payment's status. Pass commit=False when the caller owns the
+        transaction (the webhook handler commits the status change together
+        with the order update and the event record, or rolls all of it back)."""
         payment.status = status
         if status == "completed":
             payment.paid_at = utcnow()
-        self.db.commit()
-        self.db.refresh(payment)
+        if commit:
+            self.db.commit()
+            self.db.refresh(payment)
+        else:
+            self.db.flush()
         return payment
