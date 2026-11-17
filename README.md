@@ -2,6 +2,17 @@
 
 A production-oriented e-commerce backend built with FastAPI: full catalog and checkout, real Stripe payments and subscriptions, multi-currency pricing, loyalty points and gift cards, guest checkout, and a full observability stack (metrics, tracing, logs).
 
+## How payments stay correct
+
+The most common payment bug in real apps is "the customer was charged but never got what they paid for". This backend guards against it in four ways:
+
+- **Every webhook is verified.** Stripe's signature is checked before anything is read; a forged or replayed request is rejected.
+- **Each Stripe event is processed exactly once.** The event id has a unique index, so a duplicate delivery, even one arriving at the same moment, is ignored.
+- **A crash can't lose a payment.** The event record and everything it changes (payment status, order status, stock, loyalty points) are committed in one transaction. If processing fails halfway, all of it rolls back, Stripe retries, and the retry goes through.
+- **Clients can safely retry too.** Requests that create orders or payment intents accept an idempotency key, so a double-click or a network retry never charges twice.
+
+The third point is a fix with a story. The handler used to save the event id first and process the payment afterwards. If processing crashed, Stripe's retry was dropped as a "duplicate", leaving the order unpaid. [PR #94](https://github.com/Sanoy24/fastapi-ecommerce/pull/94) shows the test failing on the old code, then the fix. All tests run against a real PostgreSQL database, not SQLite.
+
 ## Features
 
 -   **Accounts & Auth**: JWT access/refresh tokens, Argon2 password hashing, email verification, password reset, TOTP-based MFA, and OAuth social login (Google, Facebook).
