@@ -4414,14 +4414,14 @@ full = ["httpx (>=0.27.0,<0.29.0)", "httpx2 (>=2.0.0)", "itsdangerous", "jinja2"
 
 [[package]]
 name = "stripe"
-version = "14.0.1"
+version = "14.4.2"
 description = "Python bindings for the Stripe API"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "stripe-14.0.1-py3-none-any.whl", hash = "sha256:ff25c5e5f085beaa98b6b9c2c729d22ad99068196cbd83fdf82669fd08311b76"},
-    {file = "stripe-14.0.1.tar.gz", hash = "sha256:f2d56345bf5d41c1f21f814b00174a3173a0b5eb4e8fc46a8f779e3d7a2efc6e"},
+    {file = "stripe-14.4.2-py3-none-any.whl", hash = "sha256:a6bb67ae9aba2e537243ed502c148a6bda4fc714d6c8b431d660690c1548ce20"},
+    {file = "stripe-14.4.2.tar.gz", hash = "sha256:5e2b9c62f6555ddab15115d17a691e95ea44365afddf51c0b286f2536937d851"},
 ]
 
 [package.dependencies]
@@ -5117,4 +5117,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "1e1af4c108c5224aa00fafc31137812ed4e1a739e9af4dcd0aeadfd5d811e58c"
+content-hash = "3d7d31f3781f800a4953db4973f2ef0f5774187f35c99abf42d104b38c3b3e1a"
